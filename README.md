@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+
+# Refile Frontend
+
+A modern, full-stack web application for file-based AI automation and community-driven command presets. Built with **Next.js**, **React**, **Supabase**, and **Tailwind CSS**.
+
+## Features
+
+- **AI File Automation**: Upload files and receive AI-generated Linux commands to process them.
+- **Preset Library**: Browse, search, and use community-contributed command presets for image, video, audio, and PDF processing.
+- **Preset Creation**: Authenticated users can create, edit, and share their own processing presets.
+- **Google Authentication**: Secure login via Google OAuth.
+- **User Dashboard**: Manage your uploads, view recent prompts, and track processing status.
+- **Like & Save Presets**: Like and save your favorite presets for quick access.
+- **Responsive UI**: Clean, modern interface with dark mode support.
+
+## Tech Stack
+
+- **Frontend**: Next.js 16, React 19, Tailwind CSS 4, Framer Motion, Lucide Icons
+- **Backend API**: FastAPI (expected, based on API calls)
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Google OAuth via Arctic
+- **State Management**: React Context API
+- **Other**: PostCSS, Shadcn UI, clsx, tailwind-merge
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js (v18+ recommended)
+- npm, yarn, pnpm, or bun
+- Supabase project (for database and authentication)
+- Backend API (FastAPI or compatible)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+1. **Clone the repository:**
+	```bash
+	git clone <repo-url>
+	cd refile-frontend
+	```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Install dependencies:**
+	```bash
+	npm install
+	# or
+	yarn install
+	```
 
-## Learn More
+3. **Configure environment variables:**
+	- Create a `.env` file in the root with your Supabase and API credentials:
+	  ```
+	  NEXT_PUBLIC_API_URL=http://localhost:8000
+	  SUPABASE_URL=your_supabase_url
+	  SUPABASE_ANON_KEY=your_supabase_anon_key
+	  ```
 
-To learn more about Next.js, take a look at the following resources:
+4. **Run the development server:**
+	```bash
+	npm run dev
+	```
+	Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Database Setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Run the SQL scripts in `src/db/schema.sql` and `src/db/add-foreign-keys.sql` on your Supabase/Postgres instance.
+- (Optional) Seed with sample presets using `src/db/sample-presets.sql`.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `src/app/` — Next.js app directory (pages, API routes, layouts)
+- `src/components/` — Reusable React components (UI, file upload, AI response, etc.)
+- `src/contexts/` — React context providers (auth, etc.)
+- `src/db/` — Database helpers, SQL schema, and sample data
+- `src/services/` — API service functions for backend communication
+- `src/hooks/` — Custom React hooks
+- `src/lib/` — Utility functions and server-side logic
+- `public/` — Static assets
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage
+
+- **Upload files** and enter a prompt to get AI-generated commands and processed results.
+- **Browse and use presets** for common file operations.
+- **Create and share your own presets** (requires Google login).
+- **Like, save, and manage** your favorite presets.
+
+## Contributing
+
+Contributions are welcome! Please open issues or pull requests for improvements and bug fixes.
+
+## License
+
+[MIT](LICENSE)
