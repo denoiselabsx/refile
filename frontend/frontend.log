@@ -1,0 +1,301 @@
+nohup: ignoring input
+
+> refile-frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 16.0.0 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://172.16.45.25:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 429ms
+ ○ Compiling / ...
+🔐 Auth Status: false
+ HEAD / 200 in 3.9s (compile: 3.8s, render: 140ms)
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ GET /?id=32f1b429-6325-43b0-aea4-cd690a64a51e&vscodeBrowserReqId=1761654916830 500 in 2.9s (compile: 2.6s, render: 268ms)
+ ⨯ ./src/app/dashboard/page.js:7:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  5 |[39m [36mimport[39m { [33mNavbar[39m } [36mfrom[39m [32m"@/components/navbar"[39m[33m;[39m
+ [90m  6 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  7 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  8 |[39m [36mimport[39m { uploadFiles[33m,[39m listPrompts } [36mfrom[39m [32m"@/services/api"[39m[33m;[39m
+ [90m  9 |[39m [36mimport[39m { useStatusPolling } [36mfrom[39m [32m"@/hooks/use-status-polling"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileText[39m[33m,[39m [33mUpload[39m[33m,[39m [33mHistory[39m[33m,[39m [33mSparkles[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/dashboard/page.js [Client Component Browser]
+    ./src/app/dashboard/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/dashboard/page.js [Client Component SSR]
+    ./src/app/dashboard/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ GET /dashboard 500 in 1637ms (compile: 1597ms, render: 40ms)
+ ⨯ ./src/app/page.js:11:1
+Module not found: Can't resolve '@/components/ai-response'
+[0m [90m  9 |[39m [36mimport[39m { [33mSidebar[39m } [36mfrom[39m [32m"@/components/sidebar"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mFileUpload[39m } [36mfrom[39m [32m"@/components/file-upload"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mAIResponse[39m } [36mfrom[39m [32m"@/components/ai-response"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m"@/contexts/auth-context"[39m[33m;[39m
+ [90m 13 |[39m
+ [90m 14 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {[0m
+
+Import map: aliased to relative './src/components/ai-response' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.js [Client Component Browser]
+    ./src/app/page.js [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.js [Client Component SSR]
+    ./src/app/page.js [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ GET / 500 in 23ms (compile: 13ms, render: 10ms)
+ ✓ Compiled in 49ms
+🔐 Auth Status: false
+ GET /?id=32f1b429-6325-43b0-aea4-cd690a64a51e&vscodeBrowserReqId=1761654916830 200 in 338ms (compile: 174ms, render: 164ms)
+ GET /api/session 401 in 609ms (compile: 582ms, render: 27ms)
+ GET /api/session 401 in 12ms (compile: 4ms, render: 8ms)
+🔐 Auth Status: false
+ GET / 200 in 240ms (compile: 17ms, render: 222ms)
+ GET /api/session 200 in 1129ms (compile: 4ms, render: 1125ms)
+ GET /api/session 200 in 1068ms (compile: 7ms, render: 1060ms)
+ GET /api/session 200 in 544ms (compile: 7ms, render: 537ms)
+ GET /api/session 200 in 872ms (compile: 6ms, render: 866ms)
+ GET /api/session 200 in 775ms (compile: 5ms, render: 770ms)
+🔐 Auth Status: false
+ GET / 200 in 155ms (compile: 9ms, render: 146ms)
+ GET /api/session 401 in 18ms (compile: 1997µs, render: 16ms)
+ GET /api/session 401 in 9ms (compile: 1547µs, render: 8ms)
+ GET /api/session 401 in 32ms (compile: 5ms, render: 27ms)
+ GET /api/session 200 in 775ms (compile: 5ms, render: 770ms)
+ GET /api/session 200 in 569ms (compile: 5ms, render: 564ms)
+🔐 Auth Status: false
+ GET / 200 in 60ms (compile: 2ms, render: 58ms)
+ GET /api/session 200 in 613ms (compile: 1929µs, render: 611ms)
+ GET /api/session 200 in 631ms (compile: 4ms, render: 627ms)
+ ⨯ Error: ENOENT: no such file or directory, open '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/app/page/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/app/page/build-manifest.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/pages/_app/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/pages/_app/build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/app/page/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/app/page/build-manifest.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/pages/_app/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/pages/_app/build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/pages/_app/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/run/media/yashvanths/New Volume/1-coding/web_dev/refile/refile-frontend/.next/dev/server/pages/_app/build-manifest.json'
+}
