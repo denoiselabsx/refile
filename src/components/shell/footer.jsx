@@ -15,8 +15,8 @@ const COLUMNS = [
     title: "Resources",
     links: [
       { label: "Docs", href: "/docs" },
-      { label: "Community", href: "https://github.com/denoiselabsx/refile", external: true },
-      { label: "Status", href: "#" },
+      { label: "Community", href: "/community" },
+      { label: "Status", href: "/status" },
     ],
   },
   {
