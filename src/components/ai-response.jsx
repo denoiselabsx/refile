@@ -206,6 +206,15 @@ export function AIResponse({ prompt }) {
               </ul>
             </div>
           )}
+
+          {prompt.filesExpired &&
+            !prompt.outputUrls?.length &&
+            prompt.status === "completed" && (
+              <div className="surface border-dashed p-3 text-[12px] text-muted-foreground">
+                Files expired — uploads and outputs are deleted after 24 hours.
+                Re-upload to run this again.
+              </div>
+            )}
         </div>
       )}
 

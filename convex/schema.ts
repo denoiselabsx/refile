@@ -92,6 +92,9 @@ export default defineSchema({
     outputFilenames: v.optional(v.array(v.string())),
     sandboxLogs: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    // Set by the cleanup cron once the blobs are deleted from storage.
+    // The history row stays; only file URLs become unavailable.
+    filesExpired: v.optional(v.boolean()),
   })
     .index("by_user_recent", ["userId"])
     .index("by_chat", ["chatId", "turnIndex"])
