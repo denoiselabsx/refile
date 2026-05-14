@@ -35,12 +35,27 @@ export const get = query({
     const chat = await ctx.db.get(id);
     if (!chat || chat.userId !== userId) return null;
 
-    const turns = await ctx.db
+    const rawTurns = await ctx.db
       .query("prompts")
       .withIndex("by_chat", (q) => q.eq("chatId", id))
       .collect();
-    // sort by turnIndex ascending (Convex index already orders, but be safe)
-    turns.sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
+    rawTurns.sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
+
+    // Attach signed download URLs for any outputs.
+    const turns = await Promise.all(
+      rawTurns.map(async (t) => {
+        const outputUrls = t.outputStorageIds
+          ? await Promise.all(
+              t.outputStorageIds.map(async (sid, i) => ({
+                storageId: sid,
+                filename: t.outputFilenames?.[i] ?? "output",
+                url: await ctx.storage.getUrl(sid),
+              }))
+            )
+          : [];
+        return { ...t, outputUrls };
+      })
+    );
 
     return { chat, turns };
   },
