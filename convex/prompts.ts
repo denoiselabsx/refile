@@ -134,9 +134,8 @@ export const submit = mutation({
       }
     }
 
-    if (inputStorageIds.length === 0) {
-      throw new Error("No input files provided and no previous output to chain from.");
-    }
+    // No input files? That's OK — the AI may answer in chat mode.
+    // If it picks command mode it will fail with a clear error.
 
     const promptId = await ctx.db.insert("prompts", {
       userId,
@@ -165,6 +164,8 @@ export const submit = mutation({
 export const patchAiResponse = internalMutation({
   args: {
     promptId: v.id("prompts"),
+    aiKind: v.optional(v.union(v.literal("command"), v.literal("chat"))),
+    aiMessage: v.optional(v.string()),
     aiCommand: v.optional(v.string()),
     aiCommandTemplate: v.optional(v.string()),
     aiDescription: v.optional(v.string()),

@@ -99,7 +99,13 @@ export function AIResponse({ prompt }) {
         </div>
       )}
 
-      {prompt.aiDescription && (
+      {prompt.aiKind === "chat" && prompt.aiMessage && (
+        <div className="text-[14px] leading-relaxed text-foreground whitespace-pre-wrap">
+          {prompt.aiMessage}
+        </div>
+      )}
+
+      {prompt.aiKind !== "chat" && prompt.aiDescription && (
         <div className="surface p-4">
           <div className="mb-1.5 flex items-center gap-2 text-[12px] text-muted-foreground">
             <Sparkles className="size-3.5" />
@@ -151,8 +157,9 @@ export function AIResponse({ prompt }) {
         </div>
       )}
 
-      {(prompt.inputFilenames?.length > 0 ||
-        prompt.outputUrls?.length > 0) && (
+      {prompt.aiKind !== "chat" &&
+        (prompt.inputFilenames?.length > 0 ||
+          prompt.outputUrls?.length > 0) && (
         <div className="grid gap-3 sm:grid-cols-2">
           {prompt.inputFilenames?.length > 0 && (
             <div className="surface p-4">

@@ -323,11 +323,11 @@ export function ChatShell({ chatId = null }) {
                 onSubmit={handleSubmit}
                 isBusy={isBusy}
                 autoFocus
-                allowEmptyFiles={inExistingChat && turns.length > 0}
+                allowEmptyFiles
                 placeholder={
                   inExistingChat && turns.length > 0
-                    ? "Follow up — leave files blank to use the previous output…"
-                    : undefined
+                    ? "Follow up — ask anything, or describe a file operation…"
+                    : "Ask anything, or drop files and describe what to do…"
                 }
               />
               <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">
