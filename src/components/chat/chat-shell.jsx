@@ -389,22 +389,20 @@ function Turn({ turn }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className="space-y-4"
+      className="space-y-6"
     >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">
-          You
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] leading-relaxed text-foreground">
+      {/* User message — right-aligned bubble, Claude-style */}
+      <div className="flex justify-end">
+        <div className="max-w-[85%] sm:max-w-[75%]">
+          <div className="rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground">
             {turn.prompt}
-          </p>
+          </div>
           {turn.inputFilenames?.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
+            <div className="mt-1.5 flex flex-wrap justify-end gap-1">
               {turn.inputFilenames.map((n, i) => (
                 <span
                   key={i}
-                  className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 text-mono text-[11px] text-muted-foreground"
+                  className="inline-flex items-center rounded-md border border-border bg-card/60 px-2 py-0.5 text-mono text-[11px] text-muted-foreground"
                 >
                   {n}
                 </span>
@@ -414,13 +412,12 @@ function Turn({ turn }) {
         </div>
       </div>
 
-      <Separator className="opacity-50" />
-
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
-          <Sparkles className="size-3" />
+      {/* AI message — left-aligned, no bubble, full width */}
+      <div className="flex items-start gap-2.5 sm:gap-3">
+        <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+          <Sparkles className="size-3.5" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <AIResponse prompt={turn} />
         </div>
       </div>
