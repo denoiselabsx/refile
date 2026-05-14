@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { Badge } from "@/components/ui/badge";
 import { absoluteUrl } from "@/lib/site";
 
@@ -100,7 +100,7 @@ export default function ChangelogPage() {
         </ol>
       </div>
 
-      <Footer />
+
     </AppShell>
   );
 }

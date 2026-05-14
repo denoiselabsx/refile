@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { Spotlight } from "@/components/spotlight";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -171,7 +171,7 @@ export default function PricingPage() {
         </div>
       </div>
 
-      <Footer />
+
     </AppShell>
   );
 }

@@ -21,7 +21,7 @@ import {
   FileCode,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { Spotlight } from "@/components/spotlight";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -440,7 +440,7 @@ export default function Home() {
         </div>
       </section>
 
-      <Footer />
+
     </AppShell>
   );
 }

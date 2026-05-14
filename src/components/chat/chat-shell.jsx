@@ -12,9 +12,6 @@ import {
   Trash2,
   X,
   PanelLeft,
-  Layers,
-  Workflow,
-  MessageSquare,
   Moon,
   Sun,
   LogOut,
@@ -40,6 +37,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
+import { APP_NAV } from "@/lib/nav";
 
 /**
  * ChatShell — shared layout for the dashboard chat experience.
@@ -212,11 +210,7 @@ export function ChatShell({ chatId = null }) {
       {/* Cross-section nav — only on mobile; on desktop the icon rail handles it */}
       <nav className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
         <ul className="space-y-0.5">
-          {[
-            { href: "/dashboard", label: "Chats", icon: MessageSquare },
-            { href: "/presets", label: "Presets", icon: Layers },
-            { href: "/workflow", label: "Workflows", icon: Workflow },
-          ].map((it) => {
+          {APP_NAV.map((it) => {
             const Icon = it.icon;
             return (
               <li key={it.href}>

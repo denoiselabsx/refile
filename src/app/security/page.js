@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck, Lock, Server, Trash2, Eye, Bug } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
@@ -113,7 +113,7 @@ export default function SecurityPage() {
           </Link>
         </div>
       </article>
-      <Footer />
+
     </AppShell>
   );
 }

@@ -14,7 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -327,7 +327,7 @@ export default function CommunityPage() {
         </div>
       </section>
 
-      <Footer />
+
     </AppShell>
   );
 }

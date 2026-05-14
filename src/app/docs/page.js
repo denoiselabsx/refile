@@ -10,7 +10,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { Badge } from "@/components/ui/badge";
 import { absoluteUrl } from "@/lib/site";
 
@@ -517,7 +517,7 @@ export default function DocsPage() {
         </article>
       </div>
 
-      <Footer />
+
     </AppShell>
   );
 }

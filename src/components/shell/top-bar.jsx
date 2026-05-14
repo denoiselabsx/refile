@@ -78,15 +78,18 @@ export function TopBar() {
           {/* Logo */}
           <Link
             href="/"
-            aria-label="ReFile home"
+            aria-label={`${BRAND.name} home`}
             className="group flex items-center gap-2 pl-2 pr-3 transition-opacity"
           >
-            <LogoMark size={22} className="transition-transform group-hover:rotate-[-6deg]" />
+            <LogoMark
+              size={22}
+              className="transition-transform group-hover:rotate-[-6deg]"
+            />
             <span className="text-[14.5px] font-semibold tracking-tight">
-              ReFile
+              {BRAND.name}
             </span>
             <span className="hidden text-[11px] text-muted-foreground/70 sm:inline">
-              / Denoise Labs
+              / {BRAND.attribution}
             </span>
           </Link>
 
@@ -257,10 +260,8 @@ export function TopBar() {
               aria-label="Site navigation"
             >
               <nav className="flex flex-col">
-                {NAV.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                {MARKETING_NAV.map((item) => {
+                  const active = isActive(pathname, item.href);
                   return (
                     <Link
                       key={item.href}
@@ -310,7 +311,7 @@ export function TopBar() {
               </div>
 
               <p className="mt-4 text-center text-[11.5px] text-muted-foreground">
-                A Denoise Labs product
+                A {BRAND.attribution} product
               </p>
             </motion.div>
           </motion.div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
-import { Footer } from "@/components/shell/footer";
+
 import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
@@ -136,7 +136,7 @@ export default function TermsPage() {
           </Link>
         </div>
       </article>
-      <Footer />
+
     </AppShell>
   );
 }
