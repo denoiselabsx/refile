@@ -1,7 +1,9 @@
 
-# Refile Frontend
+# ReFile — Frontend
 
-A modern, full-stack web application for file-based AI automation and community-driven command presets. Built with **Next.js**, **React**, **Supabase**, and **Tailwind CSS**.
+A modern web application for file-based AI automation and community-driven command presets. Built with **Next.js 16**, **React 19**, **Tailwind CSS 4**, and **Convex**.
+
+A [Denoise Labs](https://denoiselabs.com) product.
 
 ## Features
 
