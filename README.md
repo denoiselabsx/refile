@@ -8,7 +8,7 @@ A [Denoise Labs](https://denoiselabs.com) product.
 
 - **Next.js 16** (App Router) + **React 19** + **Tailwind CSS 4**
 - **Convex** — database, auth, realtime, file storage, server-side functions
-- **Vercel Sandbox** — ephemeral microVMs for running `ffmpeg`, `imagemagick`, `qpdf`, etc. on uploaded files
+- **Modal** — ephemeral container worker that runs `ffmpeg`, `imagemagick`, `qpdf`, etc. on uploaded files (free tier)
 - **Groq** — Llama 3.1 70B for natural-language → shell-command generation
 - **OpenAI Whisper** — voice transcription (optional, runs on a Next.js edge route)
 
@@ -20,6 +20,7 @@ A [Denoise Labs](https://denoiselabs.com) product.
 ├── src/components/    UI components + composer + shell
 ├── src/contexts/      React contexts (auth)
 ├── convex/            Convex backend — schema, queries, mutations, actions
+├── modal/             Modal worker (Python) that runs shell commands
 └── public/            Static assets
 ```
 
@@ -46,11 +47,13 @@ Convex deployment (set via `npx convex env set <KEY> <value>`):
 ```
 AUTH_GOOGLE_ID=<Google OAuth client id>
 AUTH_GOOGLE_SECRET=<Google OAuth client secret>
+SITE_URL=<frontend URL — http://localhost:3000 for dev>
 GROQ_API_KEY=<from console.groq.com>
-VERCEL_TOKEN=<from vercel.com/account/tokens>
-VERCEL_TEAM_ID=<from vercel.com team settings>
-VERCEL_PROJECT_ID=<from project settings>
+MODAL_WORKER_URL=<https://...modal.run, after `modal deploy modal/worker.py`>
+MODAL_WORKER_TOKEN=<optional shared secret>
 ```
+
+See [SETUP.md](./SETUP.md) for the full step-by-step.
 
 ## Deployment
 
