@@ -1,14 +1,17 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Footer } from "@/components/shell/footer";
 import { Badge } from "@/components/ui/badge";
+import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
   title: "Changelog",
   description:
     "What's new in ReFile — recent releases, fixes, and the road ahead.",
+  alternates: { canonical: absoluteUrl("/changelog") },
   openGraph: {
     title: "Changelog — ReFile",
     description: "What's new in ReFile.",
+    url: absoluteUrl("/changelog"),
   },
 };
 

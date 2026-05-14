@@ -5,15 +5,18 @@ import { Footer } from "@/components/shell/footer";
 import { Spotlight } from "@/components/spotlight";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
   title: "Pricing",
   description:
     "Simple, honest pricing for ReFile. Start free. Upgrade when files start outpacing the free quota.",
+  alternates: { canonical: absoluteUrl("/pricing") },
   openGraph: {
     title: "Pricing — ReFile",
     description:
       "Start free. Upgrade when files outpace the free quota. No surprises.",
+    url: absoluteUrl("/pricing"),
   },
 };
 

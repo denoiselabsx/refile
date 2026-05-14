@@ -12,15 +12,18 @@ import {
 import { AppShell } from "@/components/shell/app-shell";
 import { Footer } from "@/components/shell/footer";
 import { Badge } from "@/components/ui/badge";
+import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
   title: "Docs",
   description:
     "Learn how to use ReFile — composing prompts, building presets, chaining workflows, and getting the most out of voice input.",
+  alternates: { canonical: absoluteUrl("/docs") },
   openGraph: {
     title: "Docs — ReFile",
     description:
       "Learn how to use ReFile — prompts, presets, workflows, voice input.",
+    url: absoluteUrl("/docs"),
   },
 };
 
