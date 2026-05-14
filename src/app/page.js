@@ -180,7 +180,7 @@ export default function Home() {
         <div className="atmosphere" />
         <div className="absolute inset-0 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
 
-        <div className="relative mx-auto max-w-5xl px-5 pt-20 pb-20 sm:pt-28 sm:pb-28">
+        <div className="relative mx-auto max-w-5xl px-4 pt-14 pb-16 sm:px-5 sm:pt-28 sm:pb-28">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -208,8 +208,7 @@ export default function Home() {
             transition={{ duration: 0.55, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
             className="text-display mt-6 text-center text-balance"
           >
-            Do anything to a file.
-            <br />
+            Do anything to a file.{" "}
             <em className="text-muted-foreground">Just say it.</em>
           </motion.h1>
 
@@ -232,7 +231,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-8 flex flex-wrap items-center justify-center gap-3"
+            className="mt-8 flex flex-col items-stretch justify-center gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
           >
             <Button size="lg" asChild className="cta-shimmer">
               <Link href="/login/google">
@@ -265,7 +264,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-16 sm:mt-20"
+            className="mt-12 sm:mt-20"
           >
             <ShowcaseCard />
           </motion.div>
@@ -452,22 +451,24 @@ export default function Home() {
 
 function ShowcaseCard() {
   return (
-    <div className="surface mx-auto max-w-3xl overflow-hidden shadow-[0_30px_120px_-30px_rgba(0,0,0,0.4)]">
+    <div className="surface mx-auto w-full max-w-3xl overflow-hidden shadow-[0_30px_120px_-30px_rgba(0,0,0,0.4)]">
       {/* Window chrome */}
-      <div className="flex items-center justify-between border-b border-border/80 bg-muted/40 px-4 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full bg-border-strong/80" />
-          <span className="size-2.5 rounded-full bg-border-strong/60" />
-          <span className="size-2.5 rounded-full bg-border-strong/40" />
-          <span className="ml-3 text-mono text-muted-foreground">refile · /chat</span>
+      <div className="flex items-center justify-between gap-3 border-b border-border/80 bg-muted/40 px-3 py-2.5 sm:px-4">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="size-2.5 shrink-0 rounded-full bg-border-strong/80" />
+          <span className="size-2.5 shrink-0 rounded-full bg-border-strong/60" />
+          <span className="size-2.5 shrink-0 rounded-full bg-border-strong/40" />
+          <span className="ml-2 truncate text-mono text-muted-foreground sm:ml-3">
+            refile · /chat
+          </span>
         </div>
-        <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground sm:inline-flex">
           <span className="inline-flex size-1.5 rounded-full bg-success animate-pulse-soft" />
           live
         </span>
       </div>
 
-      <div className="space-y-5 p-6 sm:p-7">
+      <div className="space-y-5 p-4 sm:space-y-6 sm:p-7">
         {SHOWCASE.map((item, i) => (
           <motion.div
             key={i}
@@ -477,23 +478,25 @@ function ShowcaseCard() {
             transition={{ duration: 0.45, delay: 0.1 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-2"
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2.5 sm:gap-3">
               <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">
                 You
               </div>
-              <p className="pt-0.5 text-[13.5px] leading-relaxed text-foreground">
+              <p className="min-w-0 pt-0.5 text-[13.5px] leading-relaxed text-foreground">
                 {item.prompt}
               </p>
             </div>
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2.5 sm:gap-3">
               <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
                 <Sparkles className="size-3" />
               </div>
-              <div className="flex-1 space-y-2">
+              <div className="min-w-0 flex-1 space-y-2">
                 <Badge variant="outline" className="font-mono text-[10.5px]">
                   {item.tool}
                 </Badge>
-                <pre className="code-block">{item.command}</pre>
+                <pre className="code-block max-w-full overflow-x-auto">
+                  {item.command}
+                </pre>
               </div>
             </div>
           </motion.div>
