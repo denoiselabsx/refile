@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
-// Node runtime: more reliable multipart handling and File polyfill behavior
-// for OpenAI SDK uploads than the edge runtime, especially for non-English audio.
+// Node runtime: reliable multipart + Buffer handling for SDK uploads.
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Whisper / gpt-4o-transcribe accept ISO-639-1 language codes. Anything else
-// makes the model fall back to auto-detect, which is what we want for "auto".
+// Groq hosts an OpenAI-compatible Whisper endpoint at /openai/v1.
+// Reusing the `openai` SDK with the Groq base URL avoids a second client.
+const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+
+// whisper-large-v3 is the highest-accuracy model on Groq, supports the full
+// Indic language set, and accepts the `prompt`+`language` hints we use.
+// `whisper-large-v3-turbo` is ~3x faster but English-only — not suitable here.
+const GROQ_MODEL = "whisper-large-v3";
+
+// Whisper accepts ISO-639-1 language codes. "auto" falls through to detection.
 const SUPPORTED_LANGUAGES = new Set([
   "en",
   "hi",
@@ -22,10 +29,9 @@ const SUPPORTED_LANGUAGES = new Set([
   "ur",
 ]);
 
-// Script hints. These get sent as Whisper's `prompt` parameter, which biases
-// the decoder toward producing the right script (Devanagari vs Latin, etc.)
-// for short utterances where the model would otherwise transliterate.
-// The phrases themselves are throwaway context — only the script matters.
+// Script hints sent as Whisper's `prompt` parameter. This biases the decoder
+// toward the right script (Devanagari, Tamil, etc.) for short utterances that
+// the model would otherwise transliterate into Latin.
 const SCRIPT_PROMPTS = {
   hi: "यह हिन्दी में बोला गया है। कृपया देवनागरी लिपि में लिखें।",
   ta: "இது தமிழில் பேசப்பட்டது. தமிழ் எழுத்துகளில் எழுதவும்.",
@@ -41,10 +47,13 @@ const SCRIPT_PROMPTS = {
 };
 
 export async function POST(req) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Transcription service is not configured." },
+      {
+        error:
+          "Transcription is not configured. Set GROQ_API_KEY on the server.",
+      },
       { status: 503 }
     );
   }
@@ -66,12 +75,12 @@ export async function POST(req) {
     return NextResponse.json({ error: "No audio file uploaded" }, { status: 400 });
   }
 
-  // The browser may send mp4 (Safari), webm/opus (Chrome/Firefox), or ogg.
-  // Trust the upload's reported type; fall back to the filename extension.
+  // Trust the upload's reported MIME; fall back to filename extension. The
+  // browser may send mp4 (Safari), webm/opus (Chrome/Firefox), or ogg.
   const contentType = file.type || guessTypeFromName(file.name) || "audio/webm";
   const filename = ensureExtension(file.name || "recording", contentType);
 
-  // Whisper rejects empty files with a confusing error. Catch it early.
+  // Whisper rejects effectively-empty audio with a confusing 400. Catch early.
   if (typeof file.size === "number" && file.size < 1024) {
     return NextResponse.json(
       { error: "Recording is too short. Try again." },
@@ -79,26 +88,32 @@ export async function POST(req) {
     );
   }
 
-  const openai = new OpenAI({ apiKey });
+  const client = new OpenAI({
+    apiKey,
+    baseURL: GROQ_BASE_URL,
+  });
 
-  // Hand the SDK a real File built from the upload's bytes. Re-wrapping the
-  // Blob avoids "unsupported file type" issues seen on some runtimes when
-  // the original FormData entry is passed through verbatim.
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const uploadFile = new File([buffer], filename, { type: contentType });
+  // `toFile` accepts a Web File / Blob / Buffer / stream and produces the
+  // multipart-friendly shape the SDK needs without bespoke wrapping. This
+  // sidesteps the "Buffer is not a BlobPart" friction in older Node versions.
+  let uploadFile;
+  try {
+    uploadFile = await toFile(file, filename, { type: contentType });
+  } catch (err) {
+    return NextResponse.json(
+      { error: `Couldn't read audio: ${err.message}` },
+      { status: 400 }
+    );
+  }
 
   const usingLanguage =
     typeof language === "string" && SUPPORTED_LANGUAGES.has(language)
       ? language
       : null;
 
-  // Whisper-1 stays the default. It supports the full Indic set, accepts a
-  // language hint, and supports the prompt-as-script-hint trick. Newer
-  // gpt-4o transcription models exist but at higher cost and with stricter
-  // file-size limits — prefer whisper for now.
   const params = {
     file: uploadFile,
-    model: "whisper-1",
+    model: GROQ_MODEL,
     response_format: "verbose_json",
     temperature: 0,
   };
@@ -110,7 +125,7 @@ export async function POST(req) {
   }
 
   try {
-    const transcription = await openai.audio.transcriptions.create(params);
+    const transcription = await client.audio.transcriptions.create(params);
     const text = (transcription.text || "").trim();
 
     return NextResponse.json({
@@ -119,8 +134,7 @@ export async function POST(req) {
       duration: transcription.duration,
     });
   } catch (err) {
-    // OpenAI SDK throws APIError with status + a typed `message`. Surface
-    // the cleaned-up message rather than the raw stack to the client.
+    // Surface the upstream message so toasts give actionable info.
     const status = err?.status ?? err?.response?.status ?? 500;
     const message =
       err?.error?.message ||
