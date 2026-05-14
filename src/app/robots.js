@@ -1,4 +1,4 @@
-const SITE = process.env.NEXT_PUBLIC_APP_URL || "https://refile.vercel.app";
+import { SITE_URL } from "@/lib/site";
 
 export default function robots() {
   return {
@@ -6,10 +6,18 @@ export default function robots() {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/dashboard", "/presets/create", "/workflow"],
+        disallow: [
+          "/api/",
+          "/dashboard",
+          "/dashboard/",
+          "/presets/create",
+          "/workflow",
+          "/login",
+          "/login/",
+        ],
       },
     ],
-    sitemap: `${SITE}/sitemap.xml`,
-    host: SITE,
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

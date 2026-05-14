@@ -47,10 +47,14 @@ image = (
         "tesseract-ocr",
     )
     .pip_install("fastapi[standard]==0.115.0")
-    # ImageMagick on Debian disables PDF/PS by default — re-enable.
+    # ImageMagick on Debian disables PDF/PS/EPS by default for security.
+    # Re-enable them by stripping policy lines that block these coders.
     # Also alias `magick` → `convert` so IM7-style commands work on IM6.
     .run_commands(
-        "sed -i 's|<policy domain=\"coder\" rights=\"none\" pattern=\"PDF\" />|<policy domain=\"coder\" rights=\"read|write\" pattern=\"PDF\" />|' /etc/ImageMagick-6/policy.xml || true",
+        "sed -i '/policy domain=\"coder\".*pattern=\"PDF\"/d' /etc/ImageMagick-6/policy.xml || true",
+        "sed -i '/policy domain=\"coder\".*pattern=\"PS\"/d' /etc/ImageMagick-6/policy.xml || true",
+        "sed -i '/policy domain=\"coder\".*pattern=\"EPS\"/d' /etc/ImageMagick-6/policy.xml || true",
+        "sed -i '/policy domain=\"coder\".*pattern=\"XPS\"/d' /etc/ImageMagick-6/policy.xml || true",
         "ln -sf /usr/bin/convert /usr/local/bin/magick",
     )
 )
