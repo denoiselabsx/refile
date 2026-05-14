@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
@@ -47,11 +48,13 @@ function formatDate(d) {
 }
 
 export default function PresetDetailPage(props) {
+  const router = useRouter();
   const params = use(props.params);
   const { isAuthenticated } = useAuth();
   const preset = useQuery(api.presets.get, { id: params.id });
   const toggleLike = useMutation(api.presets.toggleLike);
   const remove = useMutation(api.presets.remove);
+  const recordUsage = useMutation(api.presets.recordUsage);
 
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -129,12 +132,32 @@ export default function PresetDetailPage(props) {
     try {
       await remove({ id: preset._id });
       toast.success("Preset deleted");
-      window.location.href = "/presets";
+      router.push("/presets");
     } catch (err) {
       toast.error("Couldn't delete preset", { description: err?.message });
       setDeleting(false);
       setConfirmDelete(false);
     }
+  };
+
+  const handleUsePreset = async () => {
+    if (!isAuthenticated) {
+      toast.error("Sign in to use this preset");
+      router.push("/login/google");
+      return;
+    }
+    // Compose a prompt the chat can run as-is: the description + the command
+    // template tells the chat exactly what to do, and reproducing the template
+    // lets the AI substitute the user's uploaded files.
+    const draft =
+      `Use this preset: "${preset.name}". ${preset.description}\n\n` +
+      `Run this command, substituting my uploaded files:\n${preset.commandTemplate}`;
+    try {
+      sessionStorage.setItem("chat_prompt_draft", draft);
+    } catch {}
+    // Fire-and-forget usage counter — don't block navigation if it fails.
+    recordUsage({ id: preset._id }).catch(() => {});
+    router.push("/dashboard");
   };
 
   return (
@@ -168,7 +191,7 @@ export default function PresetDetailPage(props) {
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <Button size="sm" disabled>
+          <Button size="sm" onClick={handleUsePreset}>
             <Play className="size-3.5" /> Use preset
           </Button>
           <Button size="sm" variant="outline" onClick={handleLike}>

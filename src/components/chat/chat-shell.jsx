@@ -53,9 +53,23 @@ export function ChatShell({ chatId = null }) {
   const [isBusy, setIsBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [initialPrompt, setInitialPrompt] = useState("");
   const scrollRef = useRef(null);
 
   useEffect(() => setMounted(true), []);
+
+  // If the user arrived from "Use preset" on a preset detail page, pull the
+  // draft prompt out of sessionStorage and seed the composer with it.
+  useEffect(() => {
+    if (chatId) return; // only on the new-chat surface
+    try {
+      const raw = sessionStorage.getItem("chat_prompt_draft");
+      if (raw) {
+        setInitialPrompt(raw);
+        sessionStorage.removeItem("chat_prompt_draft");
+      }
+    } catch {}
+  }, [chatId]);
   const isDark = mounted && (resolvedTheme || theme) === "dark";
 
   const initials = user?.name
@@ -443,6 +457,7 @@ export function ChatShell({ chatId = null }) {
                 isBusy={isBusy}
                 autoFocus
                 allowEmptyFiles
+                initialPrompt={initialPrompt}
                 placeholder={
                   inExistingChat && turns.length > 0
                     ? "Follow up — ask anything…"
