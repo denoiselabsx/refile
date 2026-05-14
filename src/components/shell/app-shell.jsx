@@ -20,9 +20,9 @@ export function AppShell({ children, mode = "auto", className = "" }) {
 
   if (effectiveMode === "app") {
     return (
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
         <AppSidebar />
-        <div className={`pl-14 ${className}`}>{children}</div>
+        <div className={`h-full pl-14 ${className}`}>{children}</div>
       </div>
     );
   }

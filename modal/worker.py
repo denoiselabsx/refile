@@ -32,6 +32,7 @@ import tempfile
 from pathlib import Path
 
 import modal
+from fastapi import Request
 
 # ─── Image: Debian + all shell tools we generate commands for ──────────────
 image = (
@@ -65,7 +66,7 @@ EXEC_TIMEOUT_SECS = 240  # 4 minutes upper bound
     secrets=[modal.Secret.from_name("refile-worker", required_keys=[])],
 )
 @modal.fastapi_endpoint(method="POST", label="run")
-async def run(request):
+async def run(request: Request):
     """
     HTTP POST entrypoint. Accepts multipart/form-data:
 

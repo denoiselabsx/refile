@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
-import { Plus, History, Sparkles, MessageSquare, Trash2 } from "lucide-react";
+import { Plus, History, Sparkles, MessageSquare, Trash2, Menu, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { Composer } from "@/components/composer";
@@ -21,6 +21,14 @@ export default function DashboardPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const [activePromptIds, setActivePromptIds] = useState([]);
   const [isBusy, setIsBusy] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current && activePromptIds.length > 0) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [activePromptIds]);
 
   const history = useQuery(
     api.prompts.listMine,
@@ -69,10 +77,14 @@ export default function DashboardPage() {
     }
   };
 
-  const handleNewChat = () => setActivePromptIds([]);
+  const handleNewChat = () => {
+    setActivePromptIds([]);
+    setHistoryOpen(false);
+  };
   const handleHistoryClick = (id) => {
     setActivePromptIds([id]);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setHistoryOpen(false);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   if (isLoading || !isAuthenticated) {
