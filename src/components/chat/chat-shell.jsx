@@ -21,7 +21,6 @@ import { AIResponse } from "@/components/ai-response";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -189,7 +188,7 @@ export function ChatShell({ chatId = null }) {
                     <Link
                       href={`/dashboard/${c._id}`}
                       onClick={() => setHistoryOpen(false)}
-                      className="min-w-0 flex-1 px-2.5 py-2 text-left"
+                      className="min-w-0 flex-1 px-2.5 py-2 text-left outline-none focus:outline-none focus-visible:outline-none"
                     >
                       <p className="line-clamp-1 text-[12.5px] font-medium text-foreground">
                         {c.title || "Untitled chat"}
