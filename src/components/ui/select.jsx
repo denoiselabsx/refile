@@ -16,7 +16,7 @@ const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) 
       "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1",
       "text-[13px] text-foreground transition-[border-color,box-shadow] duration-150 ease-out",
       "placeholder:text-muted-foreground",
-      "focus-visible:outline-none focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-foreground/8",
+      "focus-visible:outline-none",
       "disabled:cursor-not-allowed disabled:opacity-50",
       "[&>span]:line-clamp-1",
       className
