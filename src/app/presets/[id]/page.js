@@ -162,7 +162,7 @@ export default function PresetDetailPage(props) {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl px-5 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-5 sm:py-10">
         <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link href="/presets">
             <ArrowLeft className="size-3.5" /> All presets

@@ -110,20 +110,20 @@ export default function PresetsListPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
-        <div className="flex items-end justify-between gap-4">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-5 sm:py-14">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[12px] text-muted-foreground">
               <Layers className="size-3.5" />
               Community
             </div>
             <h1 className="text-h1 tracking-tight">Presets</h1>
-            <p className="mt-2 text-[15px] text-muted-foreground">
+            <p className="mt-2 text-[14.5px] text-muted-foreground sm:text-[15px]">
               Reusable recipes for converting, extracting, and transforming files.
             </p>
           </div>
           {isAuthenticated && (
-            <Button asChild>
+            <Button asChild className="self-start sm:self-auto">
               <Link href="/presets/create">
                 <Plus className="size-3.5" />
                 New preset
@@ -144,7 +144,7 @@ export default function PresetsListPage() {
           </div>
 
           <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <span className="inline-flex items-center gap-2">
                 <SlidersHorizontal className="size-3.5 text-muted-foreground" />
                 <SelectValue />
