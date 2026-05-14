@@ -81,6 +81,8 @@ export default defineSchema({
       v.literal("failed")
     ),
     // Set after Groq returns
+    aiKind: v.optional(v.union(v.literal("command"), v.literal("chat"))),
+    aiMessage: v.optional(v.string()), // set when aiKind === "chat"
     aiCommand: v.optional(v.string()),
     aiCommandTemplate: v.optional(v.string()),
     aiDescription: v.optional(v.string()),

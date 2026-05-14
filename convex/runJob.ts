@@ -46,9 +46,23 @@ function mimeFromFilename(name: string): string {
 }
 
 const AIResponse = z.object({
+  kind: z
+    .enum(["command", "chat"])
+    .describe(
+      "'command' when the user wants a file operation; 'chat' for explanations, clarifications, questions, or anything that doesn't need to run a shell command."
+    ),
+  // Chat-only field.
+  message: z
+    .string()
+    .optional()
+    .describe(
+      "When kind='chat', a markdown reply to the user (explanation, question, suggestion). Omit when kind='command'."
+    ),
+  // Command-only fields (all optional so the model can omit them on chat).
   description: z
     .string()
-    .describe("One sentence explaining what this command does."),
+    .optional()
+    .describe("When kind='command', one sentence explaining the command."),
   tool: z
     .enum([
       "ffmpeg",
@@ -60,37 +74,54 @@ const AIResponse = z.object({
       "tesseract",
       "other",
     ])
-    .describe("Primary tool the command uses."),
+    .optional()
+    .describe("When kind='command', the primary tool used."),
   command: z
     .string()
+    .optional()
     .describe(
-      "Exact shell command to run. Use the actual input filenames provided. Output filenames should be sensible and unique."
+      "When kind='command', the exact shell command. Use actual input filenames; outputs sensible and unique."
     ),
   command_template: z
     .string()
-    .describe(
-      "Reusable version with placeholders like {input_file} and {output_file}."
-    ),
-  input_files: z.array(z.string()).describe("Filenames the command reads."),
+    .optional()
+    .describe("When kind='command', reusable template with {input_file}/{output_file}."),
+  input_files: z
+    .array(z.string())
+    .optional()
+    .describe("When kind='command', filenames the command reads."),
   output_files: z
     .array(z.string())
-    .describe("Filenames the command will produce."),
+    .optional()
+    .describe("When kind='command', filenames the command will produce."),
 });
 
-const SYSTEM_PROMPT = `You are ReFile, an AI that translates natural-language file requests into Linux shell commands.
+const SYSTEM_PROMPT = `You are ReFile, an AI that helps users with file operations and answers questions about them.
 
-You will receive a user prompt and a list of input filenames. Respond with a single shell command that processes the input files to satisfy the request.
+Each turn you must choose ONE of two modes and set "kind" accordingly:
 
+CHAT MODE — kind="chat"
+Use this when the user is asking a question, requesting an explanation, clarifying, greeting, or anything that does NOT require running a shell command on a file. Reply via "message" using friendly markdown. Examples:
+- "what does -monochrome do?"
+- "why didn't that work?"
+- "thanks!"
+- "should i use png or webp here?"
+- "explain the previous command"
+
+COMMAND MODE — kind="command"
+Use this only when the user wants a file converted/processed/modified. Produce a single shell command.
 Rules:
 - Use real GNU/Linux tools: ffmpeg, magick (ImageMagick), qpdf, gs (Ghostscript), pdftoppm/pdftocairo (Poppler), pandoc, tesseract.
-- Reference inputs by their actual filenames. Output files should have sensible, unique names.
+- For PDF compression, prefer Ghostscript (gs -sDEVICE=pdfwrite -dPDFSETTINGS=/ebook ...). Do NOT use 'qpdf --linearize' for compression — that only web-optimizes.
+- Reference inputs by their actual filenames. Output filenames must be sensible, unique, and contain no spaces.
 - Prefer non-destructive flags. Never overwrite an input file.
-- Filenames may contain dots, dashes, and underscores only (no spaces or special chars). Output filenames must not contain spaces.
-- ALWAYS wrap every filename in single quotes in the shell command, e.g. magick 'input.png' -monochrome 'output.png'. This is mandatory even when the filename looks safe.
+- ALWAYS wrap every filename in single quotes, e.g. magick 'input.png' -monochrome 'output.png'.
 - Keep the command on a single line.
-- If multiple inputs need merging, treat the order given as the canonical order.
+- If multiple inputs need merging, treat the given order as canonical.
 
-Return the structured JSON shape.`;
+If the user implicitly refers to a previous output (e.g. "now rotate it"), treat the previous turn's output filenames as the inputs for this command.
+
+Always pick exactly ONE mode. Never include both a command and a chat message.`;
 
 /* ──────────────────────────────────────────────────────────────── *
  *  Main action
