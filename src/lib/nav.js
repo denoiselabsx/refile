@@ -1,0 +1,118 @@
+/**
+ * Single source of truth for navigation, brand, and footer links.
+ *
+ * Anything that renders a nav item — TopBar, AppSidebar, Footer, the chat
+ * drawer, command palette — reads from here. Add a new page in one place,
+ * see it appear everywhere it should.
+ *
+ * Note: icon references are lucide-react components, not JSX, so this can
+ * be imported by client and server components alike.
+ */
+
+import {
+  MessageSquare,
+  Layers,
+  Workflow,
+  BookOpen,
+  ScrollText,
+  CreditCard,
+  Users,
+  Activity,
+  Github,
+  Mail,
+  Shield,
+  FileText,
+  Lock,
+} from "lucide-react";
+
+export const BRAND = {
+  name: "ReFile",
+  // Shown after the logo on marketing surfaces.
+  attribution: "Denoise Labs",
+  attributionUrl: "https://denoiselabs.com",
+  email: "hello@denoiselabs.com",
+  privacyEmail: "privacy@denoiselabs.com",
+  securityEmail: "security@denoiselabs.com",
+  github: "https://github.com/denoiselabsx/refile",
+  tagline: "AI-native file automation",
+};
+
+/**
+ * Authed app nav — the icon rail on lg+, and the in-drawer list on mobile
+ * for the chat surface. Order matters; this is also the rail order.
+ */
+export const APP_NAV = [
+  { href: "/dashboard", label: "Chat", icon: MessageSquare },
+  { href: "/presets", label: "Presets", icon: Layers },
+  { href: "/workflow", label: "Workflows", icon: Workflow },
+];
+
+/**
+ * Marketing top-bar nav — public surfaces only.
+ */
+export const MARKETING_NAV = [
+  { href: "/presets", label: "Presets" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/docs", label: "Docs" },
+  { href: "/changelog", label: "Changelog" },
+];
+
+/**
+ * Footer columns — used on every marketing page.
+ * `external: true` opens in a new tab with rel=noopener,noreferrer.
+ */
+export const FOOTER_COLUMNS = [
+  {
+    title: "Product",
+    links: [
+      { label: "Chat", href: "/dashboard" },
+      { label: "Presets", href: "/presets" },
+      { label: "Workflows", href: "/workflow" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Changelog", href: "/changelog" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { label: "Docs", href: "/docs", icon: BookOpen },
+      { label: "Community", href: "/community", icon: Users },
+      { label: "Status", href: "/status", icon: Activity },
+      { label: "GitHub", href: BRAND.github, icon: Github, external: true },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Terms", href: "/terms", icon: FileText },
+      { label: "Privacy", href: "/privacy", icon: Lock },
+      { label: "Security", href: "/security", icon: Shield },
+    ],
+  },
+  {
+    title: "Contact",
+    links: [
+      { label: "Email", href: `mailto:${BRAND.email}`, icon: Mail },
+      {
+        label: "Support",
+        href: `mailto:${BRAND.email}?subject=ReFile%20support`,
+        icon: Mail,
+      },
+    ],
+  },
+];
+
+/**
+ * Active-route matcher. A nav item matches when:
+ *  - exact match, OR
+ *  - the path is a child of the nav item (`/presets/123` matches `/presets`),
+ *    but only when the nav item isn't the dashboard root (`/dashboard` should
+ *    match `/dashboard/abc` though, which is fine because the rule above
+ *    handles both shapes — see tests in commit history if revisiting).
+ */
+export function isActive(pathname, href) {
+  if (!pathname || !href) return false;
+  if (pathname === href) return true;
+  if (href === "/") return false;
+  return pathname.startsWith(`${href}/`);
+}

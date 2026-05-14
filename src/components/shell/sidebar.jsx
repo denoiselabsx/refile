@@ -7,7 +7,6 @@ import { useTheme } from "next-themes";
 import {
   MessageSquare,
   Layers,
-  Workflow,
   Settings,
   LogOut,
   Moon,
@@ -33,12 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogoMark } from "@/components/brand/logo";
 import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
-
-const NAV = [
-  { href: "/dashboard", label: "Chat", icon: MessageSquare },
-  { href: "/presets", label: "Presets", icon: Layers },
-  { href: "/workflow", label: "Workflows", icon: Workflow },
-];
+import { APP_NAV, BRAND, isActive } from "@/lib/nav";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -62,7 +56,11 @@ export function AppSidebar() {
     <TooltipProvider>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-14 flex-col border-r border-border bg-background/80 backdrop-blur-md lg:flex">
         <div className="flex h-14 items-center justify-center">
-          <Link href="/" aria-label="ReFile home" className="transition-opacity hover:opacity-80">
+          <Link
+            href="/"
+            aria-label={`${BRAND.name} home`}
+            className="transition-opacity hover:opacity-80"
+          >
             <LogoMark size={22} />
           </Link>
         </div>
@@ -81,11 +79,9 @@ export function AppSidebar() {
             <TooltipContent side="right">New chat</TooltipContent>
           </Tooltip>
 
-          {NAV.map((item) => {
+          {APP_NAV.map((item) => {
             const Icon = item.icon;
-            const active =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            const active = isActive(pathname, item.href);
             return (
               <Tooltip key={item.href}>
                 <TooltipTrigger asChild>
@@ -155,16 +151,16 @@ export function AppSidebar() {
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard">
-                  <MessageSquare className="size-3.5" /> Chats
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/presets">
-                  <Layers className="size-3.5" /> Presets
-                </Link>
-              </DropdownMenuItem>
+              {APP_NAV.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <DropdownMenuItem key={item.href} asChild>
+                    <Link href={item.href}>
+                      <Icon className="size-3.5" /> {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
               <DropdownMenuItem disabled>
                 <Settings className="size-3.5" /> Settings
               </DropdownMenuItem>

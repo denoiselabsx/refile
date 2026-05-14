@@ -11,13 +11,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { LogoMark } from "@/components/brand/logo";
 import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
-
-const NAV = [
-  { href: "/presets", label: "Presets" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/docs", label: "Docs" },
-  { href: "/changelog", label: "Changelog" },
-];
+import { BRAND, MARKETING_NAV, isActive } from "@/lib/nav";
 
 export function TopBar() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -102,9 +96,8 @@ export function TopBar() {
             className="relative hidden items-center gap-0.5 md:flex"
             onMouseLeave={() => setHovered(null)}
           >
-            {NAV.map((item) => {
-              const active =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
+            {MARKETING_NAV.map((item) => {
+              const active = isActive(pathname, item.href);
               const isHovered = hovered === item.href;
               return (
                 <Link
