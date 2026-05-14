@@ -1,18 +1,24 @@
 import { getCurrentSession } from "@/lib/server/session";
 
 export async function GET() {
-	const { session, user } = await getCurrentSession();
-	
-	if (!session) {
+	try {
+		const { session, user } = await getCurrentSession();
+
+		if (!session) {
+			return Response.json({ session: null, user: null }, { status: 401 });
+		}
+
+		return Response.json({
+			session: {
+				id: session.id,
+				userId: session.userId,
+				expiresAt: session.expiresAt,
+			},
+			user,
+		});
+	} catch {
+		// Most often: Supabase env vars missing in local dev.
+		// Treat as logged-out instead of crashing the dashboard.
 		return Response.json({ session: null, user: null }, { status: 401 });
 	}
-
-	return Response.json({ 
-		session: {
-			id: session.id,
-			userId: session.userId,
-			expiresAt: session.expiresAt
-		}, 
-		user 
-	});
 }

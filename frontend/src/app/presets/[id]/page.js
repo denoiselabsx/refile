@@ -1,14 +1,48 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { ArrowLeft, Heart, Play, Share2, Edit, Trash2, Flag, Download, Copy, Check } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState, use } from "react";
+import {
+  ArrowLeft,
+  Heart,
+  Play,
+  Share2,
+  Edit,
+  Trash2,
+  Flag,
+  Copy,
+  Check,
+  Terminal,
+  FileInput,
+  FileOutput,
+  Sparkles,
+} from "lucide-react";
+import { toast } from "sonner";
+import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Navbar } from "@/components/navbar";
-import { Sidebar } from "@/components/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/auth-context";
+
+function formatDate(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 export default function PresetDetailPage(props) {
   const params = use(props.params);
@@ -18,406 +52,338 @@ export default function PresetDetailPage(props) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchPreset();
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/presets/${params.id}`);
+        if (!res.ok) throw new Error("Not found");
+        const data = await res.json();
+        if (cancelled) return;
+        setPreset(data.preset);
+        setLiked(data.preset?.isLiked || false);
+        setLikeCount(data.preset?.likes_count || 0);
+      } catch {
+        if (!cancelled) setPreset(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [params.id]);
 
-  const fetchPreset = async () => {
+  const isOwner = user?.id === preset?.user_id;
+
+  const copyCommand = async () => {
+    if (!preset?.command_template) return;
     try {
-      const response = await fetch(`/api/presets/${params.id}`);
-      if (!response.ok) throw new Error('Preset not found');
-      
-      const data = await response.json();
-      setPreset(data.preset);
-      setLiked(data.preset.isLiked || false);
-      setLikeCount(data.preset.likes_count || 0);
-    } catch (error) {
-      console.error('Error fetching preset:', error);
-    } finally {
-      setLoading(false);
+      await navigator.clipboard.writeText(preset.command_template);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Couldn't copy");
     }
   };
 
   const handleLike = async () => {
     if (!isAuthenticated) {
-      window.location.href = '/login/google';
+      window.location.href = "/login/google";
       return;
     }
-
     try {
-      const response = await fetch(`/api/presets/${params.id}/like`, {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
-        setLiked(!liked);
-        setLikeCount(prev => liked ? prev - 1 : prev + 1);
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
+      const res = await fetch(`/api/presets/${params.id}/like`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      setLiked((v) => !v);
+      setLikeCount((v) => (liked ? Math.max(0, v - 1) : v + 1));
+    } catch {
+      toast.error("Couldn't update like");
     }
   };
 
-  const handleExecute = () => {
-    // TODO: Implement preset execution
-    console.log('Execute preset:', preset);
-  };
-
-  const handleCopyCommand = () => {
-    navigator.clipboard.writeText(preset.command_template);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleEdit = () => {
-    window.location.href = `/presets/${params.id}/edit`;
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Couldn't copy link");
+    }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this preset?')) return;
-
+    setDeleting(true);
     try {
-      const response = await fetch(`/api/presets/${params.id}`, {
-        method: 'DELETE',
-      });
-      
-      if (response.ok) {
-        window.location.href = '/presets';
-      }
-    } catch (error) {
-      console.error('Error deleting preset:', error);
+      const res = await fetch(`/api/presets/${params.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Preset deleted");
+      window.location.href = "/presets";
+    } catch {
+      toast.error("Couldn't delete preset");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
     }
-  };
-
-  const getCategoryIcon = (category) => {
-    const icons = {
-      image: "🖼️",
-      video: "🎥",
-      audio: "🎵",
-      pdf: "📄",
-      document: "📝",
-      archive: "📦"
-    };
-    return icons[category] || "⚡";
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        {isAuthenticated ? <Sidebar /> : <Navbar />}
-        <main className={`transition-all duration-300 ${isAuthenticated ? 'ml-16' : ''}`}>
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <AppShell>
+        <div className="mx-auto max-w-5xl px-5 py-10">
+          <Skeleton className="h-9 w-9 rounded-md" />
+          <Skeleton className="mt-6 h-9 w-2/3" />
+          <Skeleton className="mt-3 h-4 w-1/2" />
+          <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_300px]">
+            <Skeleton className="h-64 rounded-xl" />
+            <Skeleton className="h-64 rounded-xl" />
           </div>
-        </main>
-      </div>
+        </div>
+      </AppShell>
     );
   }
 
   if (!preset) {
     return (
-      <div className="min-h-screen bg-background">
-        {isAuthenticated ? <Sidebar /> : <Navbar />}
-        <main className={`transition-all duration-300 ${isAuthenticated ? 'ml-16' : ''}`}>
-          <div className="container mx-auto px-4 py-8">
-            <Card>
-              <CardContent className="text-center py-12">
-                <h2 className="text-2xl font-bold mb-2">Preset Not Found</h2>
-                <p className="text-muted-foreground mb-4">
-                  The preset you're looking for doesn't exist or has been removed.
-                </p>
-                <Button onClick={() => window.location.href = '/presets'}>
-                  Browse Presets
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </div>
+      <AppShell>
+        <div className="mx-auto max-w-3xl px-5 py-16">
+          <EmptyState
+            icon={Sparkles}
+            title="Preset not found"
+            description="The preset you're looking for doesn't exist or has been removed."
+            action={
+              <Button asChild>
+                <Link href="/presets">Browse presets</Link>
+              </Button>
+            }
+          />
+        </div>
+      </AppShell>
     );
   }
 
-  const isOwner = user?.id === preset.user_id;
-
   return (
-    <div className="min-h-screen bg-background">
-      {isAuthenticated ? <Sidebar /> : <Navbar />}
-      
-      <main className={`transition-all duration-300 ${isAuthenticated ? 'ml-16' : ''}`}>
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-4 mb-6">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => window.history.back()}
-              >
-                <ArrowLeft className="h-4 w-4" />
+    <AppShell>
+      <div className="mx-auto max-w-5xl px-5 py-10">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Link href="/presets">
+            <ArrowLeft className="size-3.5" /> All presets
+          </Link>
+        </Button>
+
+        {/* Title block */}
+        <div className="mt-5 flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="capitalize">{preset.category}</Badge>
+              {preset.tool && (
+                <Badge variant="secondary" className="capitalize">{preset.tool}</Badge>
+              )}
+              {preset.is_verified && <Badge variant="success">Verified</Badge>}
+              {!preset.is_public && <Badge variant="outline">Private</Badge>}
+            </div>
+            <h1 className="mt-3 text-h1 tracking-tight">{preset.name}</h1>
+            <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+              {preset.description}
+            </p>
+          </div>
+        </div>
+
+        {/* Action row */}
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <Button size="sm" disabled>
+            <Play className="size-3.5" /> Use preset
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleLike}>
+            <Heart className={`size-3.5 ${liked ? "fill-destructive text-destructive" : ""}`} />
+            {likeCount}
+          </Button>
+          <Button size="sm" variant="outline" onClick={copyCommand}>
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? "Copied" : "Copy command"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={handleShare}>
+            <Share2 className="size-3.5" /> Share
+          </Button>
+          {isOwner ? (
+            <>
+              <Separator orientation="vertical" className="mx-1 h-5" />
+              <Button size="sm" variant="ghost" asChild>
+                <Link href={`/presets/${params.id}/edit`}>
+                  <Edit className="size-3.5" /> Edit
+                </Link>
               </Button>
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  {getCategoryIcon(preset.category)}
-                  {preset.name}
-                  {preset.is_verified && (
-                    <Badge className="bg-blue-500 text-white">
-                      ✓ Verified
-                    </Badge>
-                  )}
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  {preset.description}
-                </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirmDelete(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" /> Delete
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="ghost" className="text-muted-foreground">
+              <Flag className="size-3.5" /> Report
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_280px]">
+          {/* Main column */}
+          <div className="space-y-6">
+            <div className="surface overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                  <Terminal className="size-3.5" />
+                  <span>Command template</span>
+                </div>
+                <Button size="sm" variant="ghost" onClick={copyCommand}>
+                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              <pre className="code-block rounded-none border-0 bg-transparent">
+                {preset.command_template}
+              </pre>
+            </div>
+
+            {preset.input_file_patterns?.length > 0 && (
+              <div className="surface p-5">
+                <h3 className="flex items-center gap-2 text-[13.5px] font-semibold tracking-tight">
+                  <FileInput className="size-3.5" /> Inputs
+                </h3>
+                <div className="mt-4 space-y-3">
+                  {preset.input_file_patterns.map((p, i) => (
+                    <div key={i} className="rounded-md border border-border p-3.5">
+                      <div className="text-mono text-[12px] text-foreground">
+                        {p.name || `input_${i + 1}`}
+                      </div>
+                      {p.description && (
+                        <p className="mt-1 text-[12.5px] text-muted-foreground">{p.description}</p>
+                      )}
+                      {p.extensions?.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {p.extensions.map((ext) => (
+                            <Badge key={ext} variant="outline" className="text-[10.5px]">
+                              {ext}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {preset.output_file_patterns?.length > 0 && (
+              <div className="surface p-5">
+                <h3 className="flex items-center gap-2 text-[13.5px] font-semibold tracking-tight">
+                  <FileOutput className="size-3.5" /> Outputs
+                </h3>
+                <div className="mt-4 space-y-3">
+                  {preset.output_file_patterns.map((p, i) => (
+                    <div key={i} className="rounded-md border border-border p-3.5">
+                      <div className="text-mono text-[12px]">{p.name || `output_${i + 1}`}</div>
+                      {p.description && (
+                        <p className="mt-1 text-[12.5px] text-muted-foreground">{p.description}</p>
+                      )}
+                      {p.template && (
+                        <pre className="code-block mt-2 text-[11.5px]">{p.template}</pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-4">
+            <div className="surface p-4">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Author
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <Avatar className="size-9">
+                  <AvatarImage src={preset.users?.picture} alt={preset.users?.name} />
+                  <AvatarFallback>
+                    {preset.users?.name?.[0]?.toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-medium">
+                    {preset.users?.name || "Unknown"}
+                  </div>
+                  <div className="text-[11.5px] text-muted-foreground">
+                    {formatDate(preset.created_at)}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <Button onClick={handleExecute} size="lg">
-                <Play className="h-4 w-4 mr-2" />
-                Use This Preset
-              </Button>
-              
-              <Button variant="outline" onClick={handleLike}>
-                <Heart className={`h-4 w-4 mr-2 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
-                {likeCount}
-              </Button>
-
-              <Button variant="outline" onClick={handleCopyCommand}>
-                {copied ? (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy Command
-                  </>
-                )}
-              </Button>
-
-              <Button variant="outline">
-                <Share2 className="h-4 w-4 mr-2" />
-                Share
-              </Button>
-
-              {isOwner && (
-                <>
-                  <Button variant="outline" onClick={handleEdit}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button variant="outline" onClick={handleDelete} className="text-red-600 hover:text-red-700">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
-                </>
-              )}
-
-              {!isOwner && (
-                <Button variant="outline" className="text-red-600">
-                  <Flag className="h-4 w-4 mr-2" />
-                  Report
-                </Button>
-              )}
+            <div className="surface divide-y divide-border">
+              <Row label="Used" value={`${preset.usage_count || 0} times`} />
+              <Row label="Likes" value={likeCount} />
+              <Row label="Visibility" value={preset.is_public ? "Public" : "Private"} />
+              <Row label="Category" value={preset.category} capitalize />
+              {preset.tool && <Row label="Tool" value={preset.tool} capitalize />}
             </div>
-          </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Command Template */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Command Template</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="relative">
-                    <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">
-                      <code>{preset.command_template}</code>
-                    </pre>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute top-2 right-2"
-                      onClick={handleCopyCommand}
+            {preset.tags?.length > 0 && (
+              <div className="surface p-4">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Tags
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {preset.tags.map((tag) => (
+                    <Link
+                      key={tag}
+                      href={`/presets?tag=${encodeURIComponent(tag)}`}
+                      className="inline-flex items-center rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
                     >
-                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Input File Patterns */}
-              {preset.input_file_patterns && preset.input_file_patterns.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Input File Requirements</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {preset.input_file_patterns.map((pattern, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <div className="font-semibold mb-2">
-                          {pattern.name || `Input ${index + 1}`}
-                        </div>
-                        {pattern.description && (
-                          <p className="text-sm text-muted-foreground mb-3">
-                            {pattern.description}
-                          </p>
-                        )}
-                        {pattern.extensions && pattern.extensions.length > 0 && (
-                          <div>
-                            <span className="text-sm font-medium">Supported formats:</span>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {pattern.extensions.map((ext, ei) => (
-                                <Badge key={ei} variant="outline" className="text-xs">
-                                  {ext}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Output File Patterns */}
-              {preset.output_file_patterns && preset.output_file_patterns.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Output Files</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {preset.output_file_patterns.map((pattern, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <div className="font-semibold mb-2">
-                          {pattern.name || `Output ${index + 1}`}
-                        </div>
-                        {pattern.description && (
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {pattern.description}
-                          </p>
-                        )}
-                        {pattern.template && (
-                          <div>
-                            <span className="text-sm font-medium">File naming template:</span>
-                            <code className="block mt-1 p-2 bg-muted rounded text-xs">
-                              {pattern.template}
-                            </code>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Creator Info */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Created by</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={preset.users?.picture} alt={preset.users?.name} />
-                      <AvatarFallback>
-                        {preset.users?.name?.[0]?.toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-semibold">{preset.users?.name || 'Unknown'}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {formatDate(preset.created_at)}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Metadata */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Category</span>
-                    <Badge variant="secondary" className="capitalize">
-                      {preset.category}
-                    </Badge>
-                  </div>
-                  
-                  {preset.tool && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tool</span>
-                      <Badge variant="outline" className="capitalize">
-                        {preset.tool}
-                      </Badge>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Used</span>
-                    <span>{preset.usage_count || 0} times</span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Likes</span>
-                    <span>{likeCount}</span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Visibility</span>
-                    <Badge variant={preset.is_public ? "default" : "secondary"}>
-                      {preset.is_public ? "Public" : "Private"}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Tags */}
-              {preset.tags && preset.tags.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Tags</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {preset.tags.map((tag, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                          onClick={() => window.location.href = `/presets?tag=${encodeURIComponent(tag)}`}
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                      {tag}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </main>
+      </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this preset?</DialogTitle>
+            <DialogDescription>
+              This permanently removes “{preset?.name}”. People who saved it will lose access.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} loading={deleting}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AppShell>
+  );
+}
+
+function Row({ label, value, capitalize = false }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5">
+      <span className="text-[12.5px] text-muted-foreground">{label}</span>
+      <span className={`text-[12.5px] font-medium ${capitalize ? "capitalize" : ""}`}>
+        {value}
+      </span>
     </div>
   );
 }

@@ -1,319 +1,325 @@
 "use client";
 
+import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
-import { Paperclip, ArrowRight, Upload, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Wand2,
+  FileStack,
+  Workflow,
+  Mic,
+  ShieldCheck,
+  Terminal,
+  Sparkles,
+} from "lucide-react";
+import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Navbar } from "@/components/navbar";
-import { Sidebar } from "@/components/sidebar";
-import { FileUpload } from "@/components/file-upload";
-import { AIResponse } from "@/components/ai-response";
+import { Badge } from "@/components/ui/badge";
+import { Kbd } from "@/components/ui/kbd";
 import { useAuth } from "@/contexts/auth-context";
 
+const FEATURES = [
+  {
+    icon: Wand2,
+    title: "Natural language ↔ shell",
+    body: "Describe the outcome. We translate it into the exact ImageMagick, FFmpeg, Poppler, or Pandoc command — and run it.",
+  },
+  {
+    icon: Mic,
+    title: "Voice in your language",
+    body: "Speak in Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Urdu, or English.",
+  },
+  {
+    icon: FileStack,
+    title: "Community presets",
+    body: "Reusable recipes shared by other operators. Fork them, run them, save your own.",
+  },
+  {
+    icon: Workflow,
+    title: "Visual workflows",
+    body: "Chain presets together on a canvas. Build deterministic, repeatable file pipelines.",
+  },
+  {
+    icon: Terminal,
+    title: "Command + output",
+    body: "You never lose sight of what ran. Every result ships with the exact command — copy, audit, re-run.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Yours, end to end",
+    body: "Your files, your account, your history. Google sign-in, encrypted sessions, downloadable artifacts.",
+  },
+];
+
+const SHOWCASE = [
+  {
+    prompt: "Extract audio from this MP4 as a clean 192kbps MP3.",
+    command: "ffmpeg -i input.mp4 -vn -ab 192k -ar 44100 -y output.mp3",
+    tool: "FFmpeg",
+  },
+  {
+    prompt: "Merge these three PDFs and compress to 1.2 MB.",
+    command: "qpdf --empty --pages a.pdf b.pdf c.pdf -- merged.pdf",
+    tool: "qpdf",
+  },
+  {
+    prompt: "Resize every image to 1080p, keep aspect, save as webp.",
+    command: "magick mogrify -resize 1920x1080 -format webp -quality 82 *.jpg",
+    tool: "ImageMagick",
+  },
+];
+
 export default function Home() {
-  const { isAuthenticated } = useAuth();
-  const [showUpload, setShowUpload] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  
-  // Get current user session
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
   useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const response = await fetch('/api/session');
-        if (response.ok) {
-          const { session, user } = await response.json();
-          if (session && user) {
-            setCurrentUser(user);
-            // Store user ID for components that need it
-            localStorage.setItem('user_id', user.id);
-          } else {
-            // Guest user - create a temporary ID
-            const guestId = `guest_${Date.now()}`;
-            localStorage.setItem('user_id', guestId);
-            setCurrentUser({ id: guestId, name: 'Guest User' });
-          }
-        } else {
-          // Fallback to guest
-          const guestId = `guest_${Date.now()}`;
-          localStorage.setItem('user_id', guestId);
-          setCurrentUser({ id: guestId, name: 'Guest User' });
-        }
-      } catch (error) {
-        console.error('Failed to fetch session:', error);
-        // Fallback to guest
-        const guestId = `guest_${Date.now()}`;
-        localStorage.setItem('user_id', guestId);
-        setCurrentUser({ id: guestId, name: 'Guest User' });
-      }
-    };
-
-    fetchSession();
-  }, []);
-  
-  // Debug logging
-  console.log("🔐 Auth Status:", isAuthenticated);
-  console.log("👤 Current User:", currentUser);
-
-  const handleQuickUpload = async (files, prompt) => {
-    if (!currentUser) {
-      setError("Please wait for authentication to complete");
-      return;
+    if (!isLoading && isAuthenticated) {
+      router.replace("/dashboard");
     }
-
-    setIsProcessing(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const API_URL = 'http://localhost:8000';
-      const userId = currentUser.id;
-      
-      console.log("📤 Step 1: Uploading files...");
-      
-      // Step 1: Upload files
-      const uploadFormData = new FormData();
-      files.forEach((file) => {
-        uploadFormData.append('files', file);
-      });
-
-      const uploadResponse = await fetch(`${API_URL}/api/upload`, {
-        method: 'POST',
-        headers: {
-          'x-user-id': userId,
-        },
-        body: uploadFormData,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        throw new Error(`Upload failed: ${errorText}`);
-      }
-
-      const uploadResult = await uploadResponse.json();
-      console.log("✅ Upload successful:", uploadResult);
-      
-      // Step 2: Process with AI
-      console.log("🤖 Step 2: Processing with AI...");
-      
-      const fileNames = uploadResult.files.map(f => f.stored_filename);
-      
-      const processFormData = new FormData();
-      processFormData.append('prompt', prompt);
-      processFormData.append('uploaded_files', JSON.stringify(fileNames));
-
-      const processResponse = await fetch(`${API_URL}/api/process`, {
-        method: 'POST',
-        headers: {
-          'x-user-id': userId,
-        },
-        body: processFormData,
-      });
-
-      if (!processResponse.ok) {
-        const errorText = await processResponse.text();
-        throw new Error(`AI Processing failed: ${errorText}`);
-      }
-
-      const processResult = await processResponse.json();
-      console.log("✅ AI Response received:", processResult);
-
-      // Display the AI response
-      setResult({
-        status: "ok",
-        files: uploadResult.files,
-        ai_response: processResult.ai_response
-      });
-
-    } catch (err) {
-      console.error("❌ Processing error:", err);
-      setError(err.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  const features = [
-    "File Conversion",
-    "Smart Extract",
-    "AI Summary",
-    "APIs",
-    "Retail Data",
-    "Mobility Reports",
-  ];
+  }, [isAuthenticated, isLoading, router]);
 
   return (
-    <div 
-      className="relative min-h-screen transition-colors duration-300"
-      style={{ backgroundColor: 'var(--background)' }}
-    >
-      {/* Subtle gradient glow effect */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(128,128,128,0.05),transparent_50%)]" />
-      
-      {/* Conditionally render Sidebar or Navbar */}
-      {isAuthenticated ? <Sidebar /> : <Navbar />}
+    <AppShell mode="marketing">
+      {/* ───── Hero ───── */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 grid-bg opacity-60 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
+        <div className="absolute inset-x-0 top-0 h-[480px] bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--foreground)_8%,transparent),transparent_70%)]" />
 
-      <main 
-        className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-16 transition-all duration-300"
-        style={{
-          marginLeft: isAuthenticated ? '64px' : '0'
-        }}
-      >
-        {/* Center Content */}
-        <div className="w-full max-w-4xl space-y-8">
-          {/* Logo */}
+        <div className="relative mx-auto max-w-5xl px-5 pt-20 pb-20 sm:pt-28 sm:pb-28">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-12 flex items-center justify-center gap-3"
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="flex justify-center"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: 'var(--foreground)' }}
-            >
-              <path d="M12.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v9.5" />
-              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-              <path d="M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
-            </svg>
-            <h1 className="text-5xl font-bold md:text-6xl" style={{ color: 'var(--foreground)' }}>ReFile</h1>
+            <Badge variant="outline" className="gap-1.5 rounded-full px-3 py-1">
+              <Sparkles className="size-3" />
+              <span className="text-[11.5px]">v0.1 — Public preview</span>
+            </Badge>
           </motion.div>
 
-          {/* Search Bar or Upload Section */}
-          {!showUpload ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="relative"
-            >
-              <div 
-                className="group relative flex items-center rounded-full p-3 shadow-2xl backdrop-blur-sm transition-all hover:shadow-lg"
-                style={{
-                  border: '1px solid var(--border)',
-                  backgroundColor: 'var(--card)',
-                }}
-              >
-                {/* File Upload Button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-1 h-10 w-10 hover:bg-transparent"
-                  style={{ color: 'var(--muted-foreground)' }}
-                  aria-label="Upload files"
-                  onClick={() => setShowUpload(true)}
-                >
-                  <Upload className="h-5 w-5" />
-                </Button>
+          <motion.h1
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+            className="text-display mt-6 text-center text-balance"
+          >
+            Describe the file you want.
+            <br />
+            <span className="text-muted-foreground">We write the command.</span>
+          </motion.h1>
 
-                {/* Input */}
-                <Input
-                  type="text"
-                  placeholder="What do you want to convert? Click upload to get started!"
-                  className="h-12 flex-1 border-0 bg-transparent px-4 text-base focus-visible:ring-0 focus-visible:ring-offset-0"
-                  style={{ 
-                    color: 'var(--foreground)',
-                  }}
-                  onFocus={() => setShowUpload(true)}
-                />
-
-                {/* Submit Button */}
-                <Button
-                  size="icon"
-                  className="h-12 w-12 rounded-full"
-                  style={{
-                    backgroundColor: 'var(--primary)',
-                    color: 'var(--primary-foreground)'
-                  }}
-                  onClick={() => setShowUpload(true)}
-                >
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </div>
-            </motion.div>
-          ) : (
-            /* Upload Interface */
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="w-full max-w-2xl mx-auto"
-            >
-              <div className="rounded-xl border bg-card shadow-lg p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-primary/10 p-3">
-                      <Sparkles className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold">AI File Processing</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Upload files and get AI-generated commands
-                      </p>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      setShowUpload(false);
-                      setResult(null);
-                      setError(null);
-                    }}
-                  >
-                    Back to Search
-                  </Button>
-                </div>
-
-                <FileUpload onUpload={handleQuickUpload} isUploading={isProcessing} />
-
-                {error && (
-                  <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400">
-                    <p className="font-medium">Error:</p>
-                    <p className="text-sm">{error}</p>
-                  </div>
-                )}
-
-                {result && (
-                  <div className="mt-6">
-                    <AIResponse result={result} status="completed" />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Bottom Text */}
           <motion.p
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+            className="mx-auto mt-6 max-w-2xl text-center text-[15px] leading-relaxed text-muted-foreground"
+          >
+            ReFile turns natural language — typed or spoken — into runnable shell
+            pipelines for images, video, audio, PDFs, and documents.
+            Built for people who want the speed of AI without the opacity of a black box.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="mt-8 flex flex-wrap items-center justify-center gap-3"
+          >
+            <Button size="lg" asChild>
+              <Link href="/login/google">
+                Get started — it's free
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/presets">Browse presets</Link>
+            </Button>
+          </motion.div>
+
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="mt-12 text-center text-sm"
-            style={{ color: 'var(--muted-foreground)' }}
+            transition={{ duration: 0.6, delay: 0.32 }}
+            className="mt-4 flex items-center justify-center gap-2 text-[11.5px] text-muted-foreground"
           >
-            By using ReFile, you agree to our{" "}
-            <a href="#" className="underline transition-colors" style={{ color: 'var(--muted-foreground)' }}>
-              Terms
-            </a>{" "}
-            and{" "}
-            <a href="#" className="underline transition-colors" style={{ color: 'var(--muted-foreground)' }}>
-              Privacy Policy
-            </a>
-            .
-          </motion.p>
+            <span>No credit card.</span>
+            <span aria-hidden>·</span>
+            <span>Sign in with Google.</span>
+            <span aria-hidden>·</span>
+            <span>
+              Press <Kbd>⌘</Kbd> <Kbd>K</Kbd> anywhere
+            </span>
+          </motion.div>
+
+          {/* ───── Hero showcase card ───── */}
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="mt-16 sm:mt-20"
+          >
+            <ShowcaseCard />
+          </motion.div>
         </div>
-      </main>
+      </section>
+
+      {/* ───── Features grid ───── */}
+      <section className="border-t border-border/70">
+        <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-h1 text-balance">
+              Built like a tool, not a toy.
+            </h2>
+            <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
+              Every output is a real shell command on a real file. No hidden state,
+              no black-box conversions — just AI that respects what professionals
+              already know.
+            </p>
+          </div>
+
+          <div className="mt-14 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="group bg-card p-7 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-transform group-hover:-translate-y-0.5">
+                  <f.icon className="size-4" />
+                </div>
+                <h3 className="mt-5 text-[15px] font-semibold tracking-tight">{f.title}</h3>
+                <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+                  {f.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ───── How it works ───── */}
+      <section className="border-t border-border/70 bg-subtle/40">
+        <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-h1">Three steps. One file later.</h2>
+          </div>
+
+          <div className="mt-14 grid gap-8 md:grid-cols-3">
+            {[
+              {
+                step: "01",
+                title: "Drop in your files",
+                body: "Drag and drop one or many — images, video, audio, PDFs, anything reasonable.",
+              },
+              {
+                step: "02",
+                title: "Say what you want",
+                body: "Plain English (or your own language by voice). “Resize to 1080p, keep aspect, save as WebP.”",
+              },
+              {
+                step: "03",
+                title: "Get the command + the result",
+                body: "ReFile picks the right tool, generates the command, runs it, hands you the output.",
+              },
+            ].map((s) => (
+              <div key={s.step} className="surface p-7">
+                <span className="text-mono text-muted-foreground">{s.step}</span>
+                <h3 className="mt-4 text-[15px] font-semibold tracking-tight">{s.title}</h3>
+                <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+                  {s.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ───── CTA ───── */}
+      <section className="border-t border-border/70">
+        <div className="mx-auto max-w-3xl px-5 py-24 text-center">
+          <h2 className="text-h1 text-balance">Stop googling flags. Start shipping files.</h2>
+          <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
+            Sign in once. Save your favorite recipes. Build workflows.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Button size="lg" asChild>
+              <Link href="/login/google">
+                Sign in with Google
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/presets">See community presets</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ───── Footer ───── */}
+      <footer className="border-t border-border/70">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-5 py-8 text-[12px] text-muted-foreground sm:flex-row">
+          <span>© {new Date().getFullYear()} ReFile</span>
+          <div className="flex items-center gap-5">
+            <Link href="#" className="transition-colors hover:text-foreground">Terms</Link>
+            <Link href="#" className="transition-colors hover:text-foreground">Privacy</Link>
+            <Link href="/presets" className="transition-colors hover:text-foreground">Presets</Link>
+          </div>
+        </div>
+      </footer>
+    </AppShell>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  Hero showcase — animated chat-style preview of the product
+ * ──────────────────────────────────────────────────────────────── */
+
+function ShowcaseCard() {
+  return (
+    <div className="surface mx-auto max-w-3xl overflow-hidden shadow-[0_30px_120px_-30px_rgba(0,0,0,0.35)]">
+      {/* Window chrome */}
+      <div className="flex items-center gap-1.5 border-b border-border/80 bg-muted/40 px-4 py-2.5">
+        <span className="size-2.5 rounded-full bg-border-strong/80" />
+        <span className="size-2.5 rounded-full bg-border-strong/60" />
+        <span className="size-2.5 rounded-full bg-border-strong/40" />
+        <span className="ml-3 text-mono text-muted-foreground">refile · /chat</span>
+      </div>
+
+      <div className="space-y-5 p-6 sm:p-7">
+        {SHOWCASE.map((item, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.45, delay: 0.1 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-2"
+          >
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">
+                You
+              </div>
+              <p className="pt-0.5 text-[13.5px] leading-relaxed text-foreground">
+                {item.prompt}
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
+                <Sparkles className="size-3" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Badge variant="outline" className="font-mono text-[10.5px]">
+                  {item.tool}
+                </Badge>
+                <pre className="code-block">{item.command}</pre>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }

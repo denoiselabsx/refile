@@ -1,86 +1,71 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 const AuthContext = createContext({
   isAuthenticated: false,
+  isLoading: true,
   user: null,
+  refresh: async () => {},
   login: () => {},
-  logout: () => {},
+  logout: async () => {},
 });
 
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
 
-  // Check session on mount and set up periodic checks
-  useEffect(() => {
-    checkSession();
-    
-    // Check session every 30 seconds to stay in sync
-    const interval = setInterval(checkSession, 30 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const checkSession = async () => {
+  const checkSession = useCallback(async () => {
     try {
-      const response = await fetch('/api/session');
+      const response = await fetch("/api/session", { cache: "no-store" });
       if (response.ok) {
         const data = await response.json();
-        if (data.user) {
+        if (data?.user) {
           setUser(data.user);
           setIsAuthenticated(true);
-          localStorage.setItem("isAuthenticated", "true");
         } else {
           setUser(null);
           setIsAuthenticated(false);
-          localStorage.removeItem("isAuthenticated");
         }
       } else {
         setUser(null);
         setIsAuthenticated(false);
-        localStorage.removeItem("isAuthenticated");
       }
-    } catch (error) {
-      console.error('Error checking session:', error);
-      // Fallback to localStorage for development/testing
-      const authStatus = localStorage.getItem("isAuthenticated");
-      if (authStatus === "true") {
-        setIsAuthenticated(true);
-      }
-    }
-  };
-
-  const login = () => {
-    // For real login, redirect to Google OAuth
-    window.location.href = '/login/google';
-  };
-
-  const logout = async () => {
-    try {
-      const response = await fetch('/api/logout', {
-        method: 'POST',
-      });
-      
-      if (response.ok || response.redirected) {
-        setUser(null);
-        setIsAuthenticated(false);
-        localStorage.removeItem("isAuthenticated");
-        // Redirect to home page
-        window.location.href = '/';
-      }
-    } catch (error) {
-      console.error('Error logging out:', error);
-      // Force logout on client side
+    } catch {
       setUser(null);
       setIsAuthenticated(false);
-      localStorage.removeItem("isAuthenticated");
-      window.location.href = '/';
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkSession();
+    const onFocus = () => checkSession();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [checkSession]);
+
+  const login = useCallback(() => {
+    window.location.href = "/login/google";
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } catch {
+      // ignore — proceed with client-side logout
+    }
+    setUser(null);
+    setIsAuthenticated(false);
+    window.location.href = "/";
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider
+      value={{ isAuthenticated, isLoading, user, refresh: checkSession, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

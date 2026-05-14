@@ -11,6 +11,8 @@ ENV/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Uploads
 user_uploads/
@@ -32,3 +34,5 @@ Thumbs.db
 
 # FastAPI / Uvicorn
 .pytest_cache/
+
+user_uploads/

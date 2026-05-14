@@ -1,288 +1,332 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Navbar } from "@/components/navbar";
-import { FileUpload } from "@/components/file-upload";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus,
+  History,
+  Sparkles,
+  MessageSquare,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { AppShell } from "@/components/shell/app-shell";
+import { Composer } from "@/components/composer";
 import { AIResponse } from "@/components/ai-response";
-import { uploadFiles, listPrompts } from "@/services/api";
-import { useStatusPolling } from "@/hooks/use-status-polling";
-import { FileText, Upload, History, Sparkles, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/auth-context";
+import { uploadFiles, listPrompts } from "@/services/api";
 
-// Configuration
-const MAX_RECENT_PROMPTS = 10; // Maximum number of recent prompts to display
+const STATUS = { COMPLETED: "completed", PENDING: "pending", FAILED: "failed" };
 
-// Status constants
-const PROCESSING_STATUS = {
-  COMPLETED: "completed",
-  PENDING: "pending",
-  FAILED: "failed",
-};
-
-export default function Dashboard() {
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
-  const [recentPrompts, setRecentPrompts] = useState([]);
-  const [error, setError] = useState(null);
+export default function DashboardPage() {
   const router = useRouter();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const [thread, setThread] = useState([]); // { id, prompt, response, status }
+  const [history, setHistory] = useState([]);
+  const [isBusy, setIsBusy] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
-  // Fetch session on mount
+  // Guard
   useEffect(() => {
-    async function checkSession() {
-      try {
-        const res = await fetch("/api/session");
-        const data = await res.json();
+    if (!isLoading && !isAuthenticated) router.replace("/");
+  }, [isAuthenticated, isLoading, router]);
 
-        if (!data.session || !data.user) {
-          router.push("/");
-          return;
-        }
-
-        setUser(data.user);
-        // Load recent prompts
-        loadRecentPrompts(data.user.id);
-      } catch (err) {
-        console.error("Session check failed:", err);
-        router.push("/");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    checkSession();
-  }, [router]);
-
-  const loadRecentPrompts = async (userId) => {
+  // Load history
+  const loadHistory = useCallback(async (uid) => {
+    setHistoryLoading(true);
     try {
-      const response = await listPrompts(userId);
-      if (response.status === "ok" && response.items) {
-        setRecentPrompts(response.items.slice(0, MAX_RECENT_PROMPTS));
+      const res = await listPrompts(uid);
+      if (res?.status === "ok" && res.items) {
+        setHistory(res.items.slice(0, 25));
       }
     } catch (err) {
-      console.error("Failed to load prompts:", err);
+      // history is non-critical
+    } finally {
+      setHistoryLoading(false);
     }
-  };
+  }, []);
 
-  const handleUpload = async (files, prompt) => {
-    if (!user) return;
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem("user_id", user.id);
+      loadHistory(user.id);
+    }
+  }, [user?.id, loadHistory]);
 
-    setIsUploading(true);
-    setError(null);
-    setUploadResult(null);
+  const handleSubmit = async (files, prompt) => {
+    if (!user?.id) {
+      toast.error("Not signed in");
+      return;
+    }
+    const turnId = crypto.randomUUID();
+    setThread((t) => [
+      ...t,
+      { id: turnId, prompt, files, response: null, status: "pending" },
+    ]);
+    setIsBusy(true);
 
     try {
       const result = await uploadFiles(files, prompt, user.id);
-
-      if (result.status === "ok") {
-        setUploadResult(result);
-        // Reload recent prompts
-        await loadRecentPrompts(user.id);
-      }
+      setThread((t) =>
+        t.map((turn) =>
+          turn.id === turnId
+            ? { ...turn, response: result, status: result.status === "ok" ? STATUS.COMPLETED : STATUS.FAILED }
+            : turn
+        )
+      );
+      loadHistory(user.id);
     } catch (err) {
-      console.error("Upload failed:", err);
-      setError(err.message);
+      setThread((t) =>
+        t.map((turn) =>
+          turn.id === turnId ? { ...turn, status: STATUS.FAILED, errorMessage: err.message } : turn
+        )
+      );
+      toast.error("Couldn't process", { description: err.message });
     } finally {
-      setIsUploading(false);
+      setIsBusy(false);
     }
   };
 
-  const handleReset = () => {
-    setUploadResult(null);
-    setError(null);
-  };
+  const handleNewChat = () => setThread([]);
 
-  const handleNewChat = () => {
-    // Reset the current upload result to start a new conversation
-    setUploadResult(null);
-    setError(null);
-    // Scroll to top to focus on file upload
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleChatClick = (item) => {
-    // Load the chat/conversation by setting it as the current upload result
-    // The AIResponse component expects specific structure
-    const chatResult = {
-      id: item.id,
-      ai_response: {
-        linux_command: item.ai_command,
-        command_template: item.command_template || item.ai_command,
-        input_files: [],
-        output_files: [],
-        description: item.ai_response || "Previous conversation",
-        ai_processing_status: item.ai_processing_status || PROCESSING_STATUS.COMPLETED
-      },
-      prompt: item.prompt,
-      files: [{
+  const handleHistoryClick = (item) => {
+    setThread([
+      {
         id: item.id,
-        original_filename: item.original_filename,
-        stored_filename: item.stored_filename
-      }]
-    };
-    
-    setUploadResult(chatResult);
-    setError(null);
-    
-    // Scroll to view the response
-    window.scrollTo({ top: 200, behavior: 'smooth' });
+        prompt: item.prompt,
+        files: [
+          {
+            original_filename: item.original_filename,
+            stored_filename: item.stored_filename,
+          },
+        ],
+        response: {
+          ai_response: {
+            linux_command: item.ai_command,
+            command_template: item.command_template || item.ai_command,
+            description: item.ai_response || "Previous conversation",
+            input_files: [],
+            output_files: [],
+          },
+        },
+        status: item.ai_processing_status || STATUS.COMPLETED,
+      },
+    ]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (isLoading) {
+  if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
+      <AppShell mode="app">
+        <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
+          <Skeleton className="size-8 rounded-full" />
+        </div>
+      </AppShell>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  const firstName = user?.name?.split(" ")[0] || "there";
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <Sparkles className="h-8 w-8 text-primary" />
-            Welcome back, {user.name}!
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Upload files and let AI generate the perfect command for your media processing needs
-          </p>
-        </div>
-
-        <div className="grid gap-8 lg:grid-cols-2">
-          {/* Left Column: Upload */}
-          <div className="space-y-6">
-            <div className="rounded-lg border bg-card p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="rounded-full bg-primary/10 p-3">
-                  <Upload className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold">Upload & Process</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Upload files and describe what you need
-                  </p>
-                </div>
-              </div>
-
-              <FileUpload onUpload={handleUpload} isUploading={isUploading} />
-
-              {error && (
-                <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400">
-                  <p className="font-medium">Error:</p>
-                  <p className="text-sm">{error}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Recent Files */}
-            {recentPrompts.length > 0 && (
-              <div className="rounded-lg border bg-card p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <History className="h-5 w-5 text-blue-500" />
-                    <h3 className="font-semibold">Chat History</h3>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleNewChat}
-                    className="gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New Chat
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  {recentPrompts.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 rounded-lg bg-muted/50 border cursor-pointer hover:bg-muted hover:border-primary/50 transition-all"
-                      onClick={() => handleChatClick(item)}
-                    >
-                      <p className="text-sm font-medium truncate">{item.prompt}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.original_filename} • {new Date(item.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+    <AppShell mode="app">
+      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
+        {/* History rail */}
+        <aside className="hidden border-r border-border lg:flex lg:flex-col">
+          <div className="flex h-14 items-center justify-between border-b border-border px-4">
+            <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+              <History className="size-3.5" />
+              History
+            </span>
+            <Button size="icon-sm" variant="ghost" onClick={handleNewChat} aria-label="New chat">
+              <Plus className="size-3.5" />
+            </Button>
           </div>
-
-          {/* Right Column: AI Response */}
-          <div className="space-y-6">
-            {uploadResult ? (
-              <div className="rounded-lg border bg-card p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-green-500/10 p-3">
-                      <Sparkles className="h-6 w-6 text-green-500" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold">AI Generated Command</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Ready to execute
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={handleReset}>
-                    New Upload
-                  </Button>
-                </div>
-
-                <AIResponse 
-                  result={uploadResult} 
-                  status={uploadResult.ai_response?.ai_processing_status || PROCESSING_STATUS.COMPLETED} 
-                />
+          <div className="flex-1 overflow-y-auto px-2 py-3">
+            {historyLoading ? (
+              <div className="space-y-2 px-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : history.length === 0 ? (
+              <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">
+                No conversations yet
               </div>
             ) : (
-              <div className="rounded-lg border bg-card p-12 flex flex-col items-center justify-center text-center">
-                <FileText className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold text-muted-foreground mb-2">
-                  No Results Yet
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Upload files and provide a prompt to get started
-                </p>
+              <ul className="space-y-0.5">
+                {history.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      onClick={() => handleHistoryClick(item)}
+                      className="group w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
+                    >
+                      <p className="line-clamp-1 text-[12.5px] font-medium text-foreground">
+                        {item.prompt}
+                      </p>
+                      <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                        {item.original_filename} ·{" "}
+                        {new Date(item.created_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        {/* Main canvas */}
+        <div className="flex min-h-screen flex-col">
+          {/* Thread header */}
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border glass px-5">
+            <div className="flex items-center gap-2.5">
+              <MessageSquare className="size-4 text-muted-foreground" />
+              <h1 className="text-[14px] font-medium tracking-tight">
+                {thread.length === 0 ? "New chat" : `Chat · ${thread.length} ${thread.length === 1 ? "turn" : "turns"}`}
+              </h1>
+            </div>
+            {thread.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={handleNewChat}>
+                <Trash2 className="size-3.5" />
+                Clear
+              </Button>
+            )}
+          </header>
+
+          {/* Thread body */}
+          <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-8">
+            {thread.length === 0 ? (
+              <WelcomeState firstName={firstName} />
+            ) : (
+              <div className="space-y-10">
+                <AnimatePresence initial={false}>
+                  {thread.map((turn) => (
+                    <Turn key={turn.id} turn={turn} />
+                  ))}
+                </AnimatePresence>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Stats Section */}
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          <div className="rounded-lg border bg-card p-6 text-center">
-            <div className="text-3xl font-bold text-primary mb-2">
-              {recentPrompts.length}
+          {/* Composer dock */}
+          <div className="sticky bottom-0 border-t border-border bg-background/85 backdrop-blur">
+            <div className="mx-auto w-full max-w-3xl px-5 pb-6 pt-4">
+              <Composer onSubmit={handleSubmit} isBusy={isBusy} autoFocus />
+              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                ReFile picks the right tool · always returns the command it ran
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">Total Conversions</p>
-          </div>
-
-          <div className="rounded-lg border bg-card p-6 text-center">
-            <div className="text-3xl font-bold text-green-500 mb-2">
-              {recentPrompts.filter(p => p.ai_processing_status === PROCESSING_STATUS.COMPLETED).length}
-            </div>
-            <p className="text-sm text-muted-foreground">Successful</p>
-          </div>
-
-          <div className="rounded-lg border bg-card p-6 text-center">
-            <div className="text-3xl font-bold text-blue-500 mb-2">
-              {uploadResult ? 1 : 0}
-            </div>
-            <p className="text-sm text-muted-foreground">Active Sessions</p>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
+  );
+}
+
+function WelcomeState({ firstName }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      className="mt-10"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-card">
+          <Sparkles className="size-4" />
+        </div>
+        <div>
+          <h2 className="text-[20px] font-semibold tracking-tight">
+            Hi {firstName} — what are we converting?
+          </h2>
+          <p className="mt-1 text-[13.5px] text-muted-foreground">
+            Drop files anywhere on this page, then describe the outcome.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-8 grid gap-2 sm:grid-cols-2">
+        {[
+          "Extract audio from this video as 192kbps MP3",
+          "Resize these images to 1080p, save as WebP",
+          "Merge these PDFs and compress under 2 MB",
+          "Transcribe this audio to a text file",
+        ].map((s) => (
+          <div
+            key={s}
+            className="surface px-4 py-3 text-[13px] leading-relaxed text-muted-foreground"
+          >
+            “{s}”
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function Turn({ turn }) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="space-y-4"
+    >
+      {/* User message */}
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">
+          You
+        </div>
+        <div className="flex-1">
+          <p className="text-[14px] leading-relaxed text-foreground">{turn.prompt}</p>
+          {turn.files?.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {turn.files.map((f, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 text-mono text-[11px] text-muted-foreground"
+                >
+                  {f.name || f.original_filename || f.stored_filename || "file"}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Separator className="opacity-50" />
+
+      {/* AI response */}
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
+          <Sparkles className="size-3" />
+        </div>
+        <div className="flex-1">
+          {turn.status === "pending" && !turn.response ? (
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-3 w-2/4" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : turn.status === "failed" ? (
+            <EmptyState
+              title="Couldn't process this"
+              description={turn.errorMessage || "The AI service returned an error."}
+            />
+          ) : (
+            <AIResponse result={turn.response} status={turn.status} />
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }

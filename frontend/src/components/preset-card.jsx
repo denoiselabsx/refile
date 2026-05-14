@@ -1,153 +1,133 @@
 "use client";
 
 import { useState } from "react";
-import { Heart, Play, Eye, Calendar, User, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import Link from "next/link";
+import { Heart, Play, ArrowUpRight, Image as ImageIcon, Video, Music, FileText, Archive, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
-export function PresetCard({ preset, onLike, onExecute, onView, isLiked = false, isOwner = false }) {
+const CATEGORY_ICONS = {
+  image: ImageIcon,
+  video: Video,
+  audio: Music,
+  pdf: FileText,
+  document: FileText,
+  archive: Archive,
+};
+
+function CategoryIcon({ category, className }) {
+  const Icon = CATEGORY_ICONS[category] || Zap;
+  return <Icon className={className} />;
+}
+
+function formatDate(d) {
+  if (!d) return "";
+  const date = new Date(d);
+  const now = new Date();
+  const days = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  if (days < 1) return "Today";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function PresetCard({ preset, onLike, isLiked = false }) {
   const [liked, setLiked] = useState(isLiked);
   const [likeCount, setLikeCount] = useState(preset.likes_count || 0);
 
-  const handleLike = async () => {
+  const handleLike = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     try {
-      await onLike(preset.id);
-      setLiked(!liked);
-      setLikeCount(prev => liked ? prev - 1 : prev + 1);
-    } catch (error) {
-      console.error('Error toggling like:', error);
+      await onLike?.(preset.id);
+      setLiked((v) => !v);
+      setLikeCount((v) => (liked ? Math.max(0, v - 1) : v + 1));
+    } catch {
+      // swallow — parent handles toast
     }
   };
 
-  const getCategoryIcon = (category) => {
-    const icons = {
-      image: "🖼️",
-      video: "🎥",
-      audio: "🎵",
-      pdf: "📄",
-      document: "📝",
-      archive: "📦"
-    };
-    return icons[category] || "⚡";
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
   return (
-    <Card className="group relative overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-primary/5 border-border/50">
-      {/* Verified badge for verified presets */}
-      {preset.is_verified && (
-        <div className="absolute top-3 right-3 z-10">
-          <Badge variant="default" className="bg-blue-500 text-white">
-            ✓ Verified
-          </Badge>
+    <Link
+      href={`/presets/${preset.id}`}
+      className="group surface relative flex flex-col p-5 transition-all duration-200 hover:border-border-strong hover:-translate-y-0.5"
+    >
+      {/* Top row: category icon + verified */}
+      <div className="flex items-start justify-between">
+        <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground">
+          <CategoryIcon category={preset.category} className="size-4" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          {preset.is_verified && (
+            <Badge variant="outline" className="text-[10.5px]">Verified</Badge>
+          )}
+          <ArrowUpRight className="size-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        </div>
+      </div>
+
+      {/* Title + description */}
+      <h3 className="mt-4 line-clamp-1 text-[14.5px] font-semibold tracking-tight">
+        {preset.name}
+      </h3>
+      <p className="mt-1 line-clamp-2 min-h-[2.6em] text-[13px] leading-relaxed text-muted-foreground">
+        {preset.description}
+      </p>
+
+      {/* Tags */}
+      {preset.tags?.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {preset.tags.slice(0, 3).map((tag) => (
+            <Badge key={tag} variant="secondary" className="text-[10.5px]">
+              {tag}
+            </Badge>
+          ))}
+          {preset.tags.length > 3 && (
+            <Badge variant="outline" className="text-[10.5px]">
+              +{preset.tags.length - 3}
+            </Badge>
+          )}
         </div>
       )}
 
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg font-semibold line-clamp-1 group-hover:text-primary transition-colors">
-              {getCategoryIcon(preset.category)} {preset.name}
-            </CardTitle>
-            <CardDescription className="line-clamp-2 mt-1">
-              {preset.description}
-            </CardDescription>
-          </div>
-        </div>
-
-        {/* Creator info */}
-        <div className="flex items-center gap-2 mt-3">
-          <Avatar className="h-6 w-6">
+      {/* Footer: creator + stats */}
+      <div className="mt-5 flex items-center justify-between border-t border-border pt-3.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <Avatar className="size-5">
             <AvatarImage src={preset.users?.picture} alt={preset.users?.name} />
-            <AvatarFallback className="text-xs">
-              {preset.users?.name?.[0]?.toUpperCase() || 'U'}
+            <AvatarFallback className="text-[9px]">
+              {preset.users?.name?.[0]?.toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
-          <span className="text-sm text-muted-foreground">
-            {preset.users?.name || 'Unknown'}
+          <span className="truncate text-[11.5px] text-muted-foreground">
+            {preset.users?.name || "Unknown"}
           </span>
-          <span className="text-xs text-muted-foreground">•</span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">·</span>
+          <span className="shrink-0 text-[11.5px] text-muted-foreground">
             {formatDate(preset.created_at)}
           </span>
         </div>
-      </CardHeader>
 
-      <CardContent className="pt-0">
-        {/* Tags */}
-        {preset.tags && preset.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-4">
-            {preset.tags.slice(0, 4).map((tag, index) => (
-              <Badge key={index} variant="secondary" className="text-xs">
-                {tag}
-              </Badge>
-            ))}
-            {preset.tags.length > 4 && (
-              <Badge variant="outline" className="text-xs">
-                +{preset.tags.length - 4}
-              </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Tool info */}
-        {preset.tool && (
-          <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
-            <Zap className="h-4 w-4" />
-            <span className="capitalize">{preset.tool}</span>
-          </div>
-        )}
-
-        {/* Stats */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-          <div className="flex items-center gap-1">
-            <Heart className={`h-4 w-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
-            <span>{likeCount}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Play className="h-4 w-4" />
-            <span>{preset.usage_count || 0}</span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onView(preset)}
-            className="flex-1"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            View
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => onExecute(preset)}
-            className="flex-1"
-          >
-            <Play className="h-4 w-4 mr-2" />
-            Use Preset
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
+        <div className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Play className="size-3" />
+            {preset.usage_count || 0}
+          </span>
+          <button
             onClick={handleLike}
-            className="px-2"
+            className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+            aria-label={liked ? "Unlike" : "Like"}
           >
-            <Heart className={`h-4 w-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
-          </Button>
+            <Heart
+              className={cn(
+                "size-3.5 transition-colors",
+                liked && "fill-destructive text-destructive"
+              )}
+            />
+            {likeCount}
+          </button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Link>
   );
 }

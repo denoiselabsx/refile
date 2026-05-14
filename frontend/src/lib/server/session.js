@@ -1,17 +1,17 @@
 "use server";
 
-import { createClient } from '@supabase/supabase-js';
 import { encodeBase32, encodeHexLowerCase } from "@oslojs/encoding";
 import { sha256 } from "@oslojs/crypto/sha2";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { supabase } from "@/db";
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const getSupabase = () => supabase;
 
 export async function validateSessionToken(token) {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	
-	const { data: rows, error } = await supabase
+	const { data: rows, error } = await getSupabase()
 		.from('sessions')
 		.select(`
 			session_id,
@@ -33,7 +33,7 @@ export async function validateSessionToken(token) {
 	const row = rows[0];
 
 	// Fetch role based on user email
-	const { data: roleRows } = await supabase
+	const { data: roleRows } = await getSupabase()
 		.from('user_roles')
 		.select('role')
 		.eq('email', row.users.email);
@@ -58,7 +58,7 @@ export async function validateSessionToken(token) {
 	const now = Date.now();
 
 	if (now >= session.expiresAt.getTime()) {
-		await supabase
+		await getSupabase()
 			.from('sessions')
 			.delete()
 			.eq('session_id', session.id);
@@ -68,7 +68,7 @@ export async function validateSessionToken(token) {
 	// Renew session if it's expiring in the next 15 days
 	if (now >= session.expiresAt.getTime() - 1000 * 60 * 60 * 24 * 15) {
 		session.expiresAt = new Date(now + 1000 * 60 * 60 * 24 * 30); // +30 days
-		await supabase
+		await getSupabase()
 			.from('sessions')
 			.update({ expires_at: session.expiresAt.toISOString() })
 			.eq('session_id', session.id);
@@ -84,14 +84,14 @@ export const getCurrentSession = cache(async () => {
 });
 
 export async function invalidateSession(sessionId) {
-	await supabase
+	await getSupabase()
 		.from('sessions')
 		.delete()
 		.eq('session_id', sessionId);
 }
 
 export async function invalidateUserSessions(userId) {
-	await supabase
+	await getSupabase()
 		.from('sessions')
 		.delete()
 		.eq('user_id', userId);
@@ -127,7 +127,7 @@ export async function createSession(token, userId) {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // +30 days
 
-	await supabase
+	await getSupabase()
 		.from('sessions')
 		.insert({
 			session_id: sessionId,

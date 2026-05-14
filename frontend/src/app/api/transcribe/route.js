@@ -1,48 +1,47 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export const runtime = "edge"; // 👈 ensures Edge runtime
+export const runtime = "edge";
 
 export async function POST(req) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Transcription service is not configured." },
+      { status: 503 }
+    );
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get("audio");
-    const language = formData.get("language") || "auto"; // auto-detect by default
+    const language = formData.get("language") || "auto";
 
     if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+      return NextResponse.json({ error: "No audio file uploaded" }, { status: 400 });
     }
 
-    // Re-wrap into a real Blob (Edge friendly)
     const blob = new Blob([await file.arrayBuffer()], {
       type: file.type || "audio/webm",
     });
 
-    // Build transcription options
+    const openai = new OpenAI({ apiKey });
+
     const transcriptionOptions = {
       file: new File([blob], file.name || "recording.webm", { type: blob.type }),
-      model: "whisper-1", // Whisper-1 supports 99 languages including Indian languages
+      model: "whisper-1",
     };
-
-    // Add language hint if specified (helps with accuracy)
-    // Supported: 'hi' (Hindi), 'ta' (Tamil), 'te' (Telugu), 'en' (English), etc.
     if (language && language !== "auto") {
       transcriptionOptions.language = language;
     }
 
-    // OpenAI accepts Blob in Edge runtime
     const transcription = await openai.audio.transcriptions.create(transcriptionOptions);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       text: transcription.text,
-      language: transcription.language || language 
+      language: transcription.language || language,
     });
   } catch (err) {
-    console.error("Transcription error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

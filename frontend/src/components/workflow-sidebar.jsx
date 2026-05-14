@@ -1,16 +1,25 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Loader2, Package, Image, Video, Music, FileText } from 'lucide-react';
+import { Search, Loader2, Package, Image as ImageIcon, Video, Music, FileText, Heart, Play, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 const CATEGORIES = [
   { id: 'all', name: 'All', icon: Package },
-  { id: 'image', name: 'Image', icon: Image },
+  { id: 'image', name: 'Image', icon: ImageIcon },
   { id: 'video', name: 'Video', icon: Video },
   { id: 'audio', name: 'Audio', icon: Music },
   { id: 'pdf', name: 'PDF', icon: FileText },
 ];
+
+const CATEGORY_ICONS = {
+  image: ImageIcon,
+  video: Video,
+  audio: Music,
+  pdf: FileText,
+};
 
 // Hardcoded presets for the workflow builder
 const HARDCODED_PRESETS = [
@@ -233,115 +242,92 @@ export function WorkflowSidebar() {
   };
 
   return (
-    <div className="w-80 border-r flex flex-col h-full" style={{
-      backgroundColor: 'var(--background)',
-      borderColor: 'var(--border)',
-    }}>
-      {/* Header */}
-      <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--foreground)' }}>
-          Preset Library
-        </h2>
-        
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
-          <input
-            type="text"
-            placeholder="Search presets..."
+    <div className="flex h-full w-72 flex-col border-r border-border bg-background">
+      <div className="border-b border-border p-4">
+        <h2 className="text-[13px] font-semibold tracking-tight">Preset library</h2>
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search presets…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 rounded-md border text-sm"
-            style={{
-              backgroundColor: 'var(--background)',
-              borderColor: 'var(--border)',
-              color: 'var(--foreground)',
-            }}
+            className="pl-9"
           />
         </div>
       </div>
 
-      {/* Category Filter */}
-      <div className="p-4 border-b flex flex-wrap gap-2" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex flex-wrap gap-1 border-b border-border p-3">
         {CATEGORIES.map((category) => {
           const Icon = category.icon;
           const isSelected = selectedCategory === category.id;
-          
           return (
-            <Button
+            <button
               key={category.id}
-              size="sm"
-              variant={isSelected ? "default" : "outline"}
               onClick={() => setSelectedCategory(category.id)}
-              className="gap-2"
+              className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11.5px] transition-colors ${
+                isSelected
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border bg-transparent text-muted-foreground hover:border-border-strong hover:text-foreground'
+              }`}
             >
-              <Icon className="h-3 w-3" />
+              <Icon className="size-3" />
               {category.name}
-            </Button>
+            </button>
           );
         })}
       </div>
 
-      {/* Presets List */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--muted-foreground)' }} />
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
           </div>
         ) : filteredPresets.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-              No presets found
-            </p>
+          <div className="px-3 py-10 text-center text-[12px] text-muted-foreground">
+            No presets found
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredPresets.map((preset) => (
-              <div
-                key={preset.id}
-                draggable
-                onDragStart={(e) => onDragStart(e, preset)}
-                className="p-3 rounded-lg border cursor-grab active:cursor-grabbing hover:shadow-md transition-all"
-                style={{
-                  backgroundColor: 'var(--card)',
-                  borderColor: 'var(--border)',
-                }}
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-shrink-0 mt-0.5">
-                    {preset.category === 'image' && <Image className="h-4 w-4 text-blue-500" />}
-                    {preset.category === 'video' && <Video className="h-4 w-4 text-purple-500" />}
-                    {preset.category === 'audio' && <Music className="h-4 w-4 text-green-500" />}
-                    {preset.category === 'pdf' && <FileText className="h-4 w-4 text-amber-500" />}
+          <ul className="space-y-1.5">
+            {filteredPresets.map((preset) => {
+              const Icon = CATEGORY_ICONS[preset.category] || Package;
+              return (
+                <li
+                  key={preset.id}
+                  draggable
+                  onDragStart={(e) => onDragStart(e, preset)}
+                  className="group flex cursor-grab items-start gap-2.5 rounded-md border border-border bg-card p-2.5 transition-colors hover:border-border-strong active:cursor-grabbing"
+                >
+                  <GripVertical className="mt-0.5 size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Icon className="size-3.5" />
                   </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium truncate" style={{ color: 'var(--foreground)' }}>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="line-clamp-1 text-[12.5px] font-medium tracking-tight">
                       {preset.name}
                     </h3>
-                    <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
+                    <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground">
                       {preset.description}
                     </p>
-                    
-                    <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                      <span>❤️ {preset.likes_count || 0}</span>
-                      <span>🔧 {preset.usage_count || 0}</span>
+                    <div className="mt-1.5 flex items-center gap-2.5 text-[10.5px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Heart className="size-2.5" />
+                        {preset.likes_count || 0}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Play className="size-2.5" />
+                        {preset.usage_count || 0}
+                      </span>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
-      {/* Footer Hint */}
-      <div className="p-4 border-t text-xs" style={{
-        borderColor: 'var(--border)',
-        backgroundColor: 'var(--muted)',
-        color: 'var(--muted-foreground)',
-      }}>
-        💡 Drag presets onto the canvas to build your workflow
+      <div className="border-t border-border bg-muted/30 px-4 py-3 text-[11px] text-muted-foreground">
+        Drag presets onto the canvas to build your workflow.
       </div>
     </div>
   );

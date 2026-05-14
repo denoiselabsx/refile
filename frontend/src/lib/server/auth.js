@@ -1,7 +1,27 @@
 import { Google } from "arctic";
 
-export const google = new Google(
-	process.env.GOOGLE_CLIENT_ID ?? (() => { throw new Error("GOOGLE_CLIENT_ID is not defined"); })(),
-	process.env.GOOGLE_CLIENT_SECRET ?? (() => { throw new Error("GOOGLE_CLIENT_SECRET is not defined"); })(),
-	"http://localhost:3000/login/google/callback"
+let _client = null;
+
+function buildClient() {
+  const id = process.env.GOOGLE_CLIENT_ID;
+  const secret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!id || !secret) {
+    throw new Error(
+      "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.local."
+    );
+  }
+  const callbackBase =
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return new Google(id, secret, `${callbackBase}/login/google/callback`);
+}
+
+export const google = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      if (!_client) _client = buildClient();
+      const value = _client[prop];
+      return typeof value === "function" ? value.bind(_client) : value;
+    },
+  }
 );

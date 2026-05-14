@@ -1,121 +1,73 @@
 "use client";
 
-import { memo } from 'react';
-import { Handle, Position } from 'reactflow';
-import { FileCode, Image, Video, Music, FileText, Wand2 } from 'lucide-react';
+import { memo } from "react";
+import { Handle, Position } from "reactflow";
+import { Image as ImageIcon, Video, Music, FileText, FileCode, Wand2 } from "lucide-react";
 
-const getCategoryIcon = (category) => {
-  switch (category) {
-    case 'image':
-      return <Image className="h-4 w-4" />;
-    case 'video':
-      return <Video className="h-4 w-4" />;
-    case 'audio':
-      return <Music className="h-4 w-4" />;
-    case 'pdf':
-      return <FileText className="h-4 w-4" />;
-    default:
-      return <FileCode className="h-4 w-4" />;
-  }
-};
-
-const getCategoryColor = (category) => {
-  switch (category) {
-    case 'image':
-      return '#3b82f6'; // blue
-    case 'video':
-      return '#8b5cf6'; // purple
-    case 'audio':
-      return '#10b981'; // green
-    case 'pdf':
-      return '#f59e0b'; // amber
-    default:
-      return '#6b7280'; // gray
-  }
+const ICONS = {
+  image: ImageIcon,
+  video: Video,
+  audio: Music,
+  pdf: FileText,
 };
 
 export const PresetNode = memo(({ data, selected }) => {
-  const categoryColor = getCategoryColor(data.category);
+  const Icon = ICONS[data.category] || FileCode;
 
   return (
     <div
-      className="preset-node rounded-lg border-2 shadow-lg transition-all"
+      className="rounded-lg border bg-card transition-all"
       style={{
-        backgroundColor: 'var(--card)',
-        borderColor: selected ? categoryColor : 'var(--border)',
-        minWidth: '200px',
-        maxWidth: '250px',
+        borderColor: selected ? "var(--foreground)" : "var(--border)",
+        boxShadow: selected
+          ? "0 0 0 1px var(--foreground), 0 8px 28px -8px rgba(0,0,0,0.35)"
+          : "0 1px 0 0 var(--border), 0 6px 18px -10px rgba(0,0,0,0.18)",
+        minWidth: 220,
+        maxWidth: 260,
       }}
     >
-      {/* Input Handle */}
       <Handle
         type="target"
         position={Position.Left}
         style={{
-          background: categoryColor,
-          width: '12px',
-          height: '12px',
-          border: '2px solid var(--background)',
+          background: "var(--foreground)",
+          width: 9,
+          height: 9,
+          border: "2px solid var(--background)",
         }}
       />
 
-      {/* Node Header */}
-      <div
-        className="px-3 py-2 rounded-t-md flex items-center gap-2"
-        style={{
-          backgroundColor: categoryColor,
-          opacity: 0.9,
-        }}
-      >
-        <div style={{ color: 'white' }}>
-          {getCategoryIcon(data.category)}
+      <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
+        <div className="flex size-5 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Icon className="size-3" />
         </div>
-        <span className="text-sm font-semibold text-white truncate">
+        <span className="truncate text-[12.5px] font-semibold tracking-tight">
           {data.label}
         </span>
       </div>
 
-      {/* Node Body */}
-      <div className="px-3 py-3">
-        <p className="text-xs mb-2" style={{ color: 'var(--muted-foreground)' }}>
+      <div className="px-3.5 py-3">
+        <p className="line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground">
           {data.description}
         </p>
-        
-        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-          <Wand2 className="h-3 w-3" />
-          <span>{data.tool}</span>
+        <div className="mt-2 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground">
+          <Wand2 className="size-2.5" />
+          <span className="capitalize">{data.tool}</span>
         </div>
       </div>
 
-      {/* Node Footer - Stats */}
-      {data.preset && (
-        <div className="px-3 py-2 border-t flex items-center justify-between text-xs" style={{
-          borderColor: 'var(--border)',
-          backgroundColor: 'var(--muted)',
-          opacity: 0.5,
-        }}>
-          <span style={{ color: 'var(--muted-foreground)' }}>
-            ❤️ {data.preset.likes_count || 0}
-          </span>
-          <span style={{ color: 'var(--muted-foreground)' }}>
-            🔧 {data.preset.usage_count || 0}
-          </span>
-        </div>
-      )}
-
-      {/* Output Handle */}
       <Handle
         type="source"
         position={Position.Right}
         style={{
-          background: categoryColor,
-          width: '12px',
-          height: '12px',
-          border: '2px solid var(--background)',
+          background: "var(--foreground)",
+          width: 9,
+          height: 9,
+          border: "2px solid var(--background)",
         }}
       />
     </div>
   );
 });
 
-PresetNode.displayName = 'PresetNode';
+PresetNode.displayName = "PresetNode";
