@@ -11,6 +11,40 @@ import { z } from "zod";
  *  Structured AI response schema
  * ──────────────────────────────────────────────────────────────── */
 
+const MIME_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  flac: "audio/flac",
+  ogg: "audio/ogg",
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  mkv: "video/x-matroska",
+  avi: "video/x-msvideo",
+  txt: "text/plain",
+  md: "text/markdown",
+  html: "text/html",
+  json: "application/json",
+  zip: "application/zip",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function mimeFromFilename(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_TYPES[ext] ?? "application/octet-stream";
+}
+
 const AIResponse = z.object({
   description: z
     .string()
@@ -182,7 +216,9 @@ export const runJob = internalAction({
       const outputFilenames: string[] = [];
       for (const out of result.outputs) {
         const bytes = Buffer.from(out.content_base64, "base64");
-        const storageId = await ctx.storage.store(new Blob([bytes]));
+        const storageId = await ctx.storage.store(
+          new Blob([bytes], { type: mimeFromFilename(out.filename) })
+        );
         outputStorageIds.push(storageId as string);
         outputFilenames.push(out.filename);
       }
