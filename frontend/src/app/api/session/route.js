@@ -1,5 +1,7 @@
 import { getCurrentSession } from "@/lib/server/session";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
 	try {
 		const { session, user } = await getCurrentSession();

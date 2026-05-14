@@ -1,6 +1,8 @@
 import { getCurrentSession } from "@/lib/server/session";
 import { presetsDb } from "@/db/presets";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request, { params }) {
   try {
     const { session, user } = await getCurrentSession();

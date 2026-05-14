@@ -1,6 +1,8 @@
 import { getCurrentSession } from "@/lib/server/session";
 import { presetLikesDb } from "@/db/presets";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request, props) {
   const params = await props.params;
   try {
