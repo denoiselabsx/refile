@@ -161,7 +161,7 @@ export default function DashboardPage() {
 
   return (
     <AppShell mode="app">
-      <div className="grid h-full grid-cols-1 lg:grid-cols-[260px_1fr]">
+      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 lg:grid-cols-[260px_1fr]">
         {/* Desktop history sidebar */}
         <aside className="hidden h-full min-h-0 flex-col border-r border-border lg:flex">
           {historyPanel}
