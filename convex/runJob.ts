@@ -201,8 +201,30 @@ export const runJob = internalAction({
       return;
     }
 
+    // Branch: chat mode short-circuits and skips Modal entirely.
+    if (ai.kind === "chat") {
+      await ctx.runMutation(internal.prompts.patchAiResponse, {
+        promptId,
+        aiKind: "chat",
+        aiMessage: ai.message ?? "(no reply)",
+        status: "completed",
+      });
+      return;
+    }
+
+    if (!ai.command || !ai.output_files || ai.output_files.length === 0) {
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        errorMessage:
+          "AI chose command mode but didn't return a runnable command + output filenames.",
+      });
+      return;
+    }
+
     await ctx.runMutation(internal.prompts.patchAiResponse, {
       promptId,
+      aiKind: "command",
       aiCommand: ai.command,
       aiCommandTemplate: ai.command_template,
       aiDescription: ai.description,
