@@ -90,7 +90,7 @@ export const runJob = internalAction({
     let ai;
     try {
       const result = await generateObject({
-        model: groq("llama-3.1-70b-versatile"),
+        model: groq("llama-3.3-70b-versatile"),
         schema: AIResponse,
         system: SYSTEM_PROMPT,
         prompt: `User request: ${promptDoc.prompt}\n\nInput files:\n${promptDoc.inputFilenames
