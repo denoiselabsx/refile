@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { Footer } from "@/components/shell/footer";
+import { Spotlight } from "@/components/spotlight";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -68,7 +69,8 @@ export default function PricingPage() {
   return (
     <AppShell mode="marketing">
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_at_top,black_40%,transparent_70%)]" />
+        <div className="atmosphere" />
+        <div className="absolute inset-0 grid-bg opacity-40 [mask-image:radial-gradient(ellipse_at_top,black_40%,transparent_70%)]" />
         <div className="relative mx-auto max-w-5xl px-5 pt-20 pb-12">
           <div className="text-center">
             <Badge variant="outline" className="rounded-full">
@@ -90,15 +92,17 @@ export default function PricingPage() {
       <div className="mx-auto max-w-6xl px-5 pb-20">
         <div className="grid gap-4 lg:grid-cols-3">
           {TIERS.map((tier) => (
-            <div
+            <Spotlight
               key={tier.name}
-              className={`surface relative flex flex-col p-7 ${
-                tier.featured ? "ring-1 ring-foreground/40" : ""
+              className={`surface relative flex flex-col p-7 transition-all duration-300 ease-out hover:-translate-y-1 ${
+                tier.featured
+                  ? "border-border-strong shadow-[0_0_0_1px_color-mix(in_oklch,var(--foreground)_18%,transparent),0_30px_70px_-30px_rgba(0,0,0,0.45)]"
+                  : "hover:border-border-strong"
               }`}
             >
               {tier.featured && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge>Most popular</Badge>
+                  <Badge className="cta-shimmer">Most popular</Badge>
                 </div>
               )}
               <h3 className="font-serif text-[26px] leading-tight">{tier.name}</h3>
@@ -107,7 +111,7 @@ export default function PricingPage() {
               </p>
 
               <div className="mt-6 flex items-baseline gap-2">
-                <span className="font-serif text-[42px] leading-none">
+                <span className="font-serif text-[44px] leading-none tracking-tight">
                   {tier.price}
                 </span>
                 <span className="text-[12px] text-muted-foreground">
@@ -131,7 +135,7 @@ export default function PricingPage() {
               <Button
                 variant={tier.cta.variant}
                 asChild
-                className="w-full"
+                className={`w-full ${tier.featured ? "cta-shimmer" : ""}`}
                 size="lg"
               >
                 <Link href={tier.cta.href}>
@@ -139,7 +143,7 @@ export default function PricingPage() {
                   <ArrowRight className="size-3.5" />
                 </Link>
               </Button>
-            </div>
+            </Spotlight>
           ))}
         </div>
 

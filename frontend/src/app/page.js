@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { Footer } from "@/components/shell/footer";
+import { Spotlight } from "@/components/spotlight";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
@@ -86,8 +87,8 @@ export default function Home() {
     <AppShell mode="marketing">
       {/* ───── Hero ───── */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 grid-bg opacity-60 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
-        <div className="absolute inset-x-0 top-0 h-[480px] bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--foreground)_8%,transparent),transparent_70%)]" />
+        <div className="atmosphere" />
+        <div className="absolute inset-0 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
 
         <div className="relative mx-auto max-w-5xl px-5 pt-20 pb-20 sm:pt-28 sm:pb-28">
           <motion.div
@@ -96,10 +97,19 @@ export default function Home() {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="flex justify-center"
           >
-            <Badge variant="outline" className="gap-1.5 rounded-full px-3 py-1">
-              <Sparkles className="size-3" />
-              <span className="text-[11.5px]">v0.1 — Public preview</span>
-            </Badge>
+            <div className="group inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 backdrop-blur transition-colors hover:border-border-strong">
+              <span className="relative inline-flex size-1.5">
+                <span className="absolute inset-0 animate-ping rounded-full bg-success opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-success" />
+              </span>
+              <span className="text-[11.5px] text-muted-foreground">
+                Public preview
+              </span>
+              <span className="text-[11.5px] text-muted-foreground opacity-50">·</span>
+              <span className="text-[11.5px] font-medium tracking-tight">
+                v0.1
+              </span>
+            </div>
           </motion.div>
 
           <motion.h1
@@ -130,10 +140,10 @@ export default function Home() {
             transition={{ duration: 0.55, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="mt-8 flex flex-wrap items-center justify-center gap-3"
           >
-            <Button size="lg" asChild>
+            <Button size="lg" asChild className="cta-shimmer">
               <Link href="/login/google">
                 Get started — it's free
-                <ArrowRight className="size-4" />
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
@@ -183,19 +193,26 @@ export default function Home() {
           </div>
 
           <div className="mt-14 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <div
+            {FEATURES.map((f, i) => (
+              <Spotlight
                 key={f.title}
-                className="group bg-card p-7 transition-colors hover:bg-muted/40"
+                className="group relative bg-card p-7 transition-colors"
               >
-                <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-transform group-hover:-translate-y-0.5">
-                  <f.icon className="size-4" />
-                </div>
-                <h3 className="mt-5 text-[15px] font-semibold tracking-tight">{f.title}</h3>
-                <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
-                  {f.body}
-                </p>
-              </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ duration: 0.45, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-transform group-hover:-translate-y-0.5">
+                    <f.icon className="size-4" />
+                  </div>
+                  <h3 className="mt-5 text-[15px] font-semibold tracking-tight">{f.title}</h3>
+                  <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+                    {f.body}
+                  </p>
+                </motion.div>
+              </Spotlight>
             ))}
           </div>
         </div>
@@ -274,13 +291,19 @@ export default function Home() {
 
 function ShowcaseCard() {
   return (
-    <div className="surface mx-auto max-w-3xl overflow-hidden shadow-[0_30px_120px_-30px_rgba(0,0,0,0.35)]">
+    <div className="surface mx-auto max-w-3xl overflow-hidden shadow-[0_30px_120px_-30px_rgba(0,0,0,0.4)]">
       {/* Window chrome */}
-      <div className="flex items-center gap-1.5 border-b border-border/80 bg-muted/40 px-4 py-2.5">
-        <span className="size-2.5 rounded-full bg-border-strong/80" />
-        <span className="size-2.5 rounded-full bg-border-strong/60" />
-        <span className="size-2.5 rounded-full bg-border-strong/40" />
-        <span className="ml-3 text-mono text-muted-foreground">refile · /chat</span>
+      <div className="flex items-center justify-between border-b border-border/80 bg-muted/40 px-4 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full bg-border-strong/80" />
+          <span className="size-2.5 rounded-full bg-border-strong/60" />
+          <span className="size-2.5 rounded-full bg-border-strong/40" />
+          <span className="ml-3 text-mono text-muted-foreground">refile · /chat</span>
+        </div>
+        <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:inline-flex">
+          <span className="inline-flex size-1.5 rounded-full bg-success animate-pulse-soft" />
+          live
+        </span>
       </div>
 
       <div className="space-y-5 p-6 sm:p-7">
