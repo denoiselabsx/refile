@@ -122,15 +122,42 @@ export const runJob = internalAction({
     }
     const groq = createGroq({ apiKey: groqKey });
 
+    // Load up to 5 prior turns from this chat for conversation context.
+    let priorTurns: any[] = [];
+    if (promptDoc.chatId && typeof promptDoc.turnIndex === "number") {
+      priorTurns = await ctx.runQuery(internal.runJobHelpers.loadPriorTurns, {
+        chatId: promptDoc.chatId,
+        beforeTurnIndex: promptDoc.turnIndex,
+        limit: 5,
+      });
+    }
+
+    const historyBlock = priorTurns.length
+      ? "\n\nPrior conversation (most recent last):\n" +
+        priorTurns
+          .map(
+            (t, i) =>
+              `Turn ${i + 1}:\n` +
+              `  User: ${t.prompt}\n` +
+              (t.aiCommand ? `  Ran: ${t.aiCommand}\n` : "") +
+              (t.outputFilenames?.length
+                ? `  Produced: ${t.outputFilenames.join(", ")}\n`
+                : "")
+          )
+          .join("\n") +
+        "\nIf the current request implicitly refers to the previous output (e.g. \"now make it grayscale\"), treat the previous turn's output filenames as the input filenames for this turn.\n"
+      : "";
+
     let ai;
     try {
       const result = await generateObject({
         model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
         schema: AIResponse,
         system: SYSTEM_PROMPT,
-        prompt: `User request: ${promptDoc.prompt}\n\nInput files:\n${promptDoc.inputFilenames
-          .map((f, i) => `${i + 1}. ${f}`)
-          .join("\n")}`,
+        prompt:
+          `User request: ${promptDoc.prompt}\n\nInput files:\n${promptDoc.inputFilenames
+            .map((f, i) => `${i + 1}. ${f}`)
+            .join("\n")}` + historyBlock,
         temperature: 0.2,
       });
       ai = result.object;

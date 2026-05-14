@@ -77,32 +77,84 @@ function sanitizeFilename(name: string): string {
   return cleaned || "file";
 }
 
+function titleFromPrompt(prompt: string): string {
+  const trimmed = prompt.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= 40) return trimmed || "New chat";
+  return trimmed.slice(0, 40).trimEnd() + "…";
+}
+
 export const submit = mutation({
   args: {
     prompt: v.string(),
     inputStorageIds: v.array(v.id("_storage")),
     inputFilenames: v.array(v.string()),
+    chatId: v.optional(v.id("chats")),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not signed in");
 
-    // Sanitize filenames so shell-unfriendly chars don't trip up the worker.
-    // The AI then sees these clean names and references them directly.
-    const safeFilenames = args.inputFilenames.map(sanitizeFilename);
+    // Resolve or create the chat for this turn.
+    let chatId = args.chatId;
+    if (chatId) {
+      const chat = await ctx.db.get(chatId);
+      if (!chat || chat.userId !== userId) throw new Error("Chat not found");
+    } else {
+      chatId = await ctx.db.insert("chats", {
+        userId,
+        title: titleFromPrompt(args.prompt),
+        lastActivity: Date.now(),
+      });
+    }
+
+    // Compute the next turn index within this chat.
+    const existingTurns = await ctx.db
+      .query("prompts")
+      .withIndex("by_chat", (q) => q.eq("chatId", chatId!))
+      .collect();
+    const turnIndex = existingTurns.length;
+
+    // Auto-chain: if no new uploads were provided AND we have a prior successful
+    // turn, reuse the previous turn's outputs as this turn's inputs.
+    let inputStorageIds = args.inputStorageIds;
+    let inputFilenames = args.inputFilenames.map(sanitizeFilename);
+
+    if (inputStorageIds.length === 0 && existingTurns.length > 0) {
+      const lastWithOutputs = [...existingTurns]
+        .sort((a, b) => (b.turnIndex ?? 0) - (a.turnIndex ?? 0))
+        .find(
+          (t) =>
+            t.status === "completed" &&
+            (t.outputStorageIds?.length ?? 0) > 0 &&
+            (t.outputFilenames?.length ?? 0) > 0
+        );
+      if (lastWithOutputs) {
+        inputStorageIds = lastWithOutputs.outputStorageIds!;
+        inputFilenames = lastWithOutputs.outputFilenames!.map(sanitizeFilename);
+      }
+    }
+
+    if (inputStorageIds.length === 0) {
+      throw new Error("No input files provided and no previous output to chain from.");
+    }
 
     const promptId = await ctx.db.insert("prompts", {
       userId,
+      chatId,
+      turnIndex,
       prompt: args.prompt,
-      inputStorageIds: args.inputStorageIds,
-      inputFilenames: safeFilenames,
+      inputStorageIds,
+      inputFilenames,
       status: "pending",
     });
+
+    // Bump the chat's lastActivity so it sorts to the top.
+    await ctx.db.patch(chatId, { lastActivity: Date.now() });
 
     // Schedule the action (runs out-of-band, immediately)
     await ctx.scheduler.runAfter(0, internal.runJob.runJob, { promptId });
 
-    return promptId;
+    return { promptId, chatId };
   },
 });
 

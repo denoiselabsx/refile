@@ -69,6 +69,9 @@ export function Composer({
   isBusy = false,
   placeholder = "Describe what to do with your files…",
   autoFocus = false,
+  // When true, file attachment is optional (e.g. follow-up in an existing chat
+  // can reuse the previous turn's outputs).
+  allowEmptyFiles = false,
 }) {
   const [files, setFiles] = useState([]);
   const [prompt, setPrompt] = useState("");
@@ -194,13 +197,19 @@ export function Composer({
     }
   }, [language]);
 
-  const canSend = !isBusy && !isRecording && !isTranscribing && prompt.trim().length > 0 && files.length > 0;
+  const canSend =
+    !isBusy &&
+    !isRecording &&
+    !isTranscribing &&
+    prompt.trim().length > 0 &&
+    (allowEmptyFiles || files.length > 0);
 
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (!canSend) {
-      if (files.length === 0) toast.error("Add at least one file");
-      else if (!prompt.trim()) toast.error("Tell us what to do");
+      if (!prompt.trim()) toast.error("Tell us what to do");
+      else if (!allowEmptyFiles && files.length === 0)
+        toast.error("Add at least one file");
       return;
     }
     await onSubmit(files, prompt.trim());

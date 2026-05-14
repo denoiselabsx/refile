@@ -56,9 +56,20 @@ export default defineSchema({
     .index("by_preset", ["presetId"])
     .index("by_user_and_preset", ["userId", "presetId"]),
 
+  // A chat = a conversation session containing multiple turns (prompts).
+  chats: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    lastActivity: v.number(),
+  })
+    .index("by_user_recent", ["userId", "lastActivity"]),
+
   // A prompt = one chat turn: user prompt + AI command + execution result
   prompts: defineTable({
     userId: v.id("users"),
+    // chatId is optional only for legacy rows; new turns always have one.
+    chatId: v.optional(v.id("chats")),
+    turnIndex: v.optional(v.number()),
     prompt: v.string(),
     inputStorageIds: v.array(v.id("_storage")),
     inputFilenames: v.array(v.string()),
@@ -83,6 +94,7 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
   })
     .index("by_user_recent", ["userId"])
+    .index("by_chat", ["chatId", "turnIndex"])
     .index("by_status", ["status"]),
 
   // Visual workflows on the canvas
