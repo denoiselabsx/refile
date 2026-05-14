@@ -273,12 +273,12 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-h1-serif text-balance">
-              Try anything. <em className="text-muted-foreground">Really.</em>
+              If a tool can do it, <em className="text-muted-foreground">you can ask for it.</em>
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-              ReFile speaks every file format that ffmpeg, ImageMagick, Ghostscript,
-              qpdf, Poppler, Tesseract, and Pandoc can touch — which is most of them.
-              Here are some of the things people ask for.
+              ReFile speaks every file format and every operation that ffmpeg,
+              ImageMagick, Ghostscript, qpdf, Poppler, Tesseract, and Pandoc support —
+              which is most of them. A few of the things people ask for:
             </p>
           </div>
 
