@@ -68,13 +68,8 @@ export const metadata = {
     description: SITE.shortDescription,
     images: ["/opengraph-image"],
   },
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-    ],
-    apple: "/apple-icon.png",
-  },
+  // Icons are auto-discovered from src/app/icon.{js,svg} and apple-icon.js.
+  // No explicit `icons` field needed.
   manifest: "/manifest.webmanifest",
   robots: {
     index: true,
