@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
 import { CommandPalette } from "@/components/command-palette";
@@ -109,11 +110,13 @@ export default function RootLayout({ children }) {
           enableSystem
           storageKey="refile-theme"
         >
-          <AuthProvider>
-            {children}
-            <CommandPalette />
-            <Toaster />
-          </AuthProvider>
+          <ConvexClientProvider>
+            <AuthProvider>
+              {children}
+              <CommandPalette />
+              <Toaster />
+            </AuthProvider>
+          </ConvexClientProvider>
         </ThemeProvider>
       </body>
     </html>

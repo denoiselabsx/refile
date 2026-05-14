@@ -1,20 +1,13 @@
 "use client";
 
-// Metadata for this route is defined in presets/layout.js since page is "use client".
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  Plus,
-  SlidersHorizontal,
-  Layers,
-  Sparkles,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { Search, Plus, SlidersHorizontal, Layers, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -26,30 +19,23 @@ import {
 } from "@/components/ui/select";
 import { PresetCard } from "@/components/preset-card";
 import { useAuth } from "@/contexts/auth-context";
+import { api } from "../../../convex/_generated/api";
 
 const SORT_OPTIONS = [
-  { value: "created_at:desc", label: "Newest" },
-  { value: "created_at:asc", label: "Oldest" },
+  { value: "_creationTime:desc", label: "Newest" },
+  { value: "_creationTime:asc", label: "Oldest" },
   { value: "usage_count:desc", label: "Most used" },
   { value: "likes_count:desc", label: "Most liked" },
 ];
 
 export default function PresetsListPage() {
   const { isAuthenticated } = useAuth();
-  const [presets, setPresets] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [category, setCategory] = useState(null);
   const [tags, setTags] = useState([]);
-  const [sort, setSort] = useState("created_at:desc");
-  const [categories, setCategories] = useState([]);
-  const [popularTags, setPopularTags] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [sort, setSort] = useState("_creationTime:desc");
 
-  // Debounce search
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 220);
     return () => clearTimeout(id);
@@ -57,98 +43,49 @@ export default function PresetsListPage() {
 
   const [sortBy, sortOrder] = sort.split(":");
 
-  const fetchPresets = useCallback(
-    async (pageToFetch) => {
-      const isFirstPage = pageToFetch === 1;
-      isFirstPage ? setLoading(true) : setLoadingMore(true);
-      try {
-        const params = new URLSearchParams({
-          page: String(pageToFetch),
-          limit: "20",
-          sortBy,
-          sortOrder,
-          ...(debouncedSearch && { search: debouncedSearch }),
-          ...(category && { category }),
-          ...(tags.length > 0 && { tags: JSON.stringify(tags) }),
-        });
-        const res = await fetch(`/api/presets?${params}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`Failed (${res.status})`);
-        const data = await res.json().catch(() => ({}));
-        const items = Array.isArray(data.presets) ? data.presets : [];
-        setPresets((prev) => (isFirstPage ? items : [...prev, ...items]));
-        setHasMore(items.length === 20);
-      } catch {
-        // Fail-soft: leave whatever's already on screen, surface a small toast
-        if (isFirstPage) {
-          setPresets([]);
-          setHasMore(false);
-          toast.error("Presets are unavailable right now");
-        }
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [debouncedSearch, category, tags, sortBy, sortOrder]
-  );
+  const presets = useQuery(api.presets.list, {
+    search: debouncedSearch || undefined,
+    category: category || undefined,
+    tags: tags.length > 0 ? tags : undefined,
+    sortBy: sortBy === "_creationTime" ? undefined : sortBy,
+    sortOrder,
+    limit: 40,
+  });
 
-  // First page / filter changes
-  useEffect(() => {
-    setPage(1);
-    fetchPresets(1);
-  }, [fetchPresets]);
-
-  // Subsequent pages
-  useEffect(() => {
-    if (page > 1) fetchPresets(page);
-  }, [page, fetchPresets]);
-
-  useEffect(() => {
-    (async () => {
-      const safeJson = (url) =>
-        fetch(url, { cache: "no-store" })
-          .then((r) => (r.ok ? r.json() : {}))
-          .catch(() => ({}));
-      const [c, t] = await Promise.all([
-        safeJson("/api/presets/categories"),
-        safeJson("/api/presets/tags"),
-      ]);
-      setCategories(Array.isArray(c.categories) ? c.categories : []);
-      setPopularTags(Array.isArray(t.tags) ? t.tags : []);
-    })();
-  }, []);
+  const categories = useQuery(api.presets.categories);
+  const popularTags = useQuery(api.presets.popularTags, { limit: 10 });
+  const toggleLike = useMutation(api.presets.toggleLike);
 
   const handleLike = async (id) => {
     if (!isAuthenticated) {
       toast.error("Sign in to like presets");
-      window.location.href = "/login/google";
       return;
     }
     try {
-      const res = await fetch(`/api/presets/${id}/like`, { method: "POST" });
-      if (!res.ok) throw new Error();
-    } catch {
-      toast.error("Couldn't update like");
+      await toggleLike({ id });
+    } catch (err) {
+      toast.error("Couldn't update like", { description: err?.message });
     }
   };
 
-  const toggleTag = (tag) => {
-    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
-  };
+  const toggleTag = (tag) =>
+    setTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
 
   const clearAll = () => {
     setSearch("");
     setCategory(null);
     setTags([]);
-    setSort("created_at:desc");
+    setSort("_creationTime:desc");
   };
 
   const hasFilters = Boolean(category || tags.length || debouncedSearch);
+  const loading = presets === undefined;
 
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
-        {/* Header */}
         <div className="flex items-end justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -170,7 +107,6 @@ export default function PresetsListPage() {
           )}
         </div>
 
-        {/* Toolbar */}
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -199,12 +135,11 @@ export default function PresetsListPage() {
           </Select>
         </div>
 
-        {/* Filter rails */}
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
             Categories
           </span>
-          {categories.length === 0
+          {!categories
             ? Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-6 w-20" />
               ))
@@ -226,12 +161,12 @@ export default function PresetsListPage() {
               })}
         </div>
 
-        {popularTags.length > 0 && (
+        {popularTags && popularTags.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
               Tags
             </span>
-            {popularTags.slice(0, 10).map((t) => {
+            {popularTags.map((t) => {
               const active = tags.includes(t.name);
               return (
                 <button
@@ -258,7 +193,6 @@ export default function PresetsListPage() {
           </div>
         )}
 
-        {/* Grid */}
         <div className="mt-8">
           {loading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -274,7 +208,9 @@ export default function PresetsListPage() {
                 description="Try changing your search or clearing filters."
                 action={
                   hasFilters ? (
-                    <Button variant="outline" onClick={clearAll}>Clear filters</Button>
+                    <Button variant="outline" onClick={clearAll}>
+                      Clear filters
+                    </Button>
                   ) : isAuthenticated ? (
                     <Button asChild>
                       <Link href="/presets/create">
@@ -286,30 +222,16 @@ export default function PresetsListPage() {
               />
             </div>
           ) : (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {presets.map((preset) => (
-                  <PresetCard
-                    key={preset.id}
-                    preset={preset}
-                    onLike={handleLike}
-                    isLiked={preset.isLiked}
-                  />
-                ))}
-              </div>
-
-              {hasMore && (
-                <div className="mt-10 flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage((p) => p + 1)}
-                    loading={loadingMore}
-                  >
-                    {loadingMore ? "Loading…" : "Load more"}
-                  </Button>
-                </div>
-              )}
-            </>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {presets.map((preset) => (
+                <PresetCard
+                  key={preset._id}
+                  preset={preset}
+                  onLike={handleLike}
+                  isLiked={preset.isLiked}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>

@@ -16,56 +16,24 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/auth-context";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-function getDisplayNames(file) {
-  if (typeof file === "string") return { stored: file, original: file };
-  if (!file || typeof file !== "object") return { stored: "file", original: "file" };
-  const stored =
-    file.stored_filename ||
-    file.storedFilename ||
-    file.storedName ||
-    file.filename ||
-    file.name;
-  const original =
-    file.original_filename ||
-    file.originalFilename ||
-    file.filename ||
-    file.name ||
-    stored;
-  return { stored: stored || original || "file", original: original || stored || "file" };
-}
-
-export function AIResponse({ result, status = "completed" }) {
+export function AIResponse({ prompt }) {
   const router = useRouter();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [downloading, setDownloading] = useState({});
 
-  if (!result) return null;
+  if (!prompt) return null;
 
-  const ai = result.ai_response || result;
-  const isProcessing = status === "processing";
-  const isFailed = status === "failed";
-
-  if (!ai || (!ai.linux_command && !ai.description && !isProcessing && !isFailed)) {
-    return (
-      <div className="surface flex items-center gap-3 p-4">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <p className="text-[13px] text-muted-foreground">Preparing response…</p>
-      </div>
-    );
-  }
-
-  const { linux_command, input_files, output_files, description, command_template } = ai;
+  const isPending =
+    prompt.status === "pending" || prompt.status === "generating";
+  const isRunning = prompt.status === "running";
+  const isFailed = prompt.status === "failed";
 
   const copyCommand = async () => {
-    if (!linux_command) return;
+    if (!prompt.aiCommand) return;
     try {
-      await navigator.clipboard.writeText(linux_command);
+      await navigator.clipboard.writeText(prompt.aiCommand);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -78,59 +46,39 @@ export function AIResponse({ result, status = "completed" }) {
       toast.error("Sign in to save presets");
       return;
     }
-    if (!command_template) {
+    if (!prompt.aiCommandTemplate) {
       toast.error("This response has no reusable template");
       return;
     }
     sessionStorage.setItem(
       "preset_draft",
       JSON.stringify({
-        command_template,
-        description: description || "",
-        input_files: input_files || [],
-        output_files: output_files || [],
+        command_template: prompt.aiCommandTemplate,
+        description: prompt.aiDescription || "",
+        input_files: prompt.aiInputFiles || [],
+        output_files: prompt.aiOutputFiles || [],
+        tool: prompt.aiTool || "",
       })
     );
     router.push("/presets/create");
   };
 
-  const handleDownload = async (file) => {
-    const { stored, original } = getDisplayNames(file);
-    const userId = user?.id || localStorage.getItem("user_id");
-    if (!userId) {
-      toast.error("Sign in to download files");
-      return;
-    }
-    const url = `${API_BASE}/files/${encodeURIComponent(userId)}/${encodeURIComponent(stored)}`;
-
-    try {
-      setDownloading((d) => ({ ...d, [stored]: true }));
-      const res = await fetch(url, { headers: { "x-user-id": userId } });
-      if (!res.ok) throw new Error(`Failed (${res.status})`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = original;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objectUrl);
-    } catch (err) {
-      toast.error("Download failed", { description: err?.message });
-    } finally {
-      setDownloading((d) => ({ ...d, [stored]: false }));
-    }
-  };
-
   return (
     <div className="space-y-3">
-      {/* Status strip */}
       <div className="flex items-center gap-2 text-[12px]">
-        {isProcessing ? (
+        {isPending ? (
           <>
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-            <span className="text-muted-foreground">Processing…</span>
+            <span className="text-muted-foreground">
+              {prompt.status === "generating"
+                ? "Generating command…"
+                : "Queued…"}
+            </span>
+          </>
+        ) : isRunning ? (
+          <>
+            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            <span className="text-muted-foreground">Running in sandbox…</span>
           </>
         ) : isFailed ? (
           <>
@@ -145,27 +93,39 @@ export function AIResponse({ result, status = "completed" }) {
         )}
       </div>
 
-      {/* Description */}
-      {description && (
+      {isFailed && prompt.errorMessage && (
+        <div className="surface border-destructive/40 bg-destructive/5 p-4 text-[13px] text-destructive">
+          {prompt.errorMessage}
+        </div>
+      )}
+
+      {prompt.aiDescription && (
         <div className="surface p-4">
           <div className="mb-1.5 flex items-center gap-2 text-[12px] text-muted-foreground">
             <Sparkles className="size-3.5" />
             <span>What this does</span>
           </div>
-          <p className="text-[13.5px] leading-relaxed text-foreground">{description}</p>
+          <p className="text-[13.5px] leading-relaxed text-foreground">
+            {prompt.aiDescription}
+          </p>
         </div>
       )}
 
-      {/* Command */}
-      {linux_command && (
+      {prompt.aiCommand && (
         <div className="surface overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
               <Terminal className="size-3.5" />
               <span>Command</span>
+              {prompt.aiTool && (
+                <>
+                  <span className="opacity-50">·</span>
+                  <span className="capitalize">{prompt.aiTool}</span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-1.5">
-              {command_template && (
+              {prompt.aiCommandTemplate && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -176,78 +136,88 @@ export function AIResponse({ result, status = "completed" }) {
                 </Button>
               )}
               <Button size="sm" variant="ghost" onClick={copyCommand}>
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
           </div>
-          <pre className="code-block rounded-none border-0 bg-transparent">{linux_command}</pre>
+          <pre className="code-block rounded-none border-0 bg-transparent">
+            {prompt.aiCommand}
+          </pre>
         </div>
       )}
 
-      {/* I/O */}
-      {(input_files?.length > 0 || output_files?.length > 0) && (
+      {(prompt.inputFilenames?.length > 0 ||
+        prompt.outputUrls?.length > 0) && (
         <div className="grid gap-3 sm:grid-cols-2">
-          {input_files?.length > 0 && (
+          {prompt.inputFilenames?.length > 0 && (
             <div className="surface p-4">
               <div className="mb-2.5 flex items-center gap-2 text-[12px] text-muted-foreground">
                 <FileInput className="size-3.5" />
-                <span>Inputs ({input_files.length})</span>
+                <span>Inputs ({prompt.inputFilenames.length})</span>
               </div>
               <ul className="space-y-1.5">
-                {input_files.map((file, i) => {
-                  const { original } = getDisplayNames(file);
-                  return (
-                    <li
-                      key={i}
-                      className="truncate rounded-md bg-muted/50 px-2.5 py-1.5 text-mono text-[12px]"
-                      title={original}
-                    >
-                      {original}
-                    </li>
-                  );
-                })}
+                {prompt.inputFilenames.map((n, i) => (
+                  <li
+                    key={i}
+                    className="truncate rounded-md bg-muted/50 px-2.5 py-1.5 text-mono text-[12px]"
+                    title={n}
+                  >
+                    {n}
+                  </li>
+                ))}
               </ul>
             </div>
           )}
 
-          {output_files?.length > 0 && (
+          {prompt.outputUrls?.length > 0 && (
             <div className="surface p-4">
               <div className="mb-2.5 flex items-center gap-2 text-[12px] text-muted-foreground">
                 <FileDown className="size-3.5" />
-                <span>Outputs ({output_files.length})</span>
+                <span>Outputs ({prompt.outputUrls.length})</span>
               </div>
               <ul className="space-y-1.5">
-                {output_files.map((file, i) => {
-                  const { stored, original } = getDisplayNames(file);
-                  const isDown = Boolean(downloading[stored]);
-                  return (
-                    <li
-                      key={i}
-                      className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-2.5 py-1.5"
+                {prompt.outputUrls.map((out) => (
+                  <li
+                    key={out.storageId}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-2.5 py-1.5"
+                  >
+                    <span
+                      className="truncate text-mono text-[12px]"
+                      title={out.filename}
                     >
-                      <span className="truncate text-mono text-[12px]" title={original}>
-                        {original}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDownload(file)}
-                        disabled={isDown}
+                      {out.filename}
+                    </span>
+                    {out.url && (
+                      <a
+                        href={out.url}
+                        download={out.filename}
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       >
-                        {isDown ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Download className="size-3.5" />
-                        )}
-                      </Button>
-                    </li>
-                  );
-                })}
+                        <Download className="size-3.5" />
+                      </a>
+                    )}
+                  </li>
+                ))}
               </ul>
             </div>
           )}
         </div>
+      )}
+
+      {isFailed && prompt.sandboxLogs && (
+        <details className="surface">
+          <summary className="cursor-pointer px-4 py-2.5 text-[12px] text-muted-foreground">
+            Sandbox logs
+          </summary>
+          <pre className="code-block rounded-none border-0 bg-transparent text-[11px]">
+            {prompt.sandboxLogs}
+          </pre>
+        </details>
       )}
     </div>
   );

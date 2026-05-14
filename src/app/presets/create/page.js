@@ -24,8 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useMutation } from "convex/react";
 import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
+import { api } from "../../../../convex/_generated/api";
 
 const CATEGORIES = [
   { value: "image", label: "Image" },
@@ -67,7 +69,8 @@ const EMPTY = {
 };
 
 export default function CreatePresetPage() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  const createPreset = useMutation(api.presets.create);
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState(EMPTY);
   const [tagInput, setTagInput] = useState("");
@@ -204,15 +207,27 @@ export default function CreatePresetPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/presets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, user_id: user.id }),
+      const presetId = await createPreset({
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
+        tool: formData.tool,
+        commandTemplate: formData.command_template,
+        inputFilePatterns: formData.input_file_patterns.map((p) => ({
+          name: p.name,
+          extensions: p.extensions || [],
+          description: p.description || undefined,
+        })),
+        outputFilePatterns: formData.output_file_patterns.map((p) => ({
+          name: p.name,
+          template: p.template || undefined,
+          description: p.description || undefined,
+        })),
+        tags: formData.tags,
+        isPublic: formData.is_public,
       });
-      if (!res.ok) throw new Error("Failed to create preset");
-      const data = await res.json();
       toast.success("Preset published");
-      window.location.href = `/presets/${data.preset.id}`;
+      window.location.href = `/presets/${presetId}`;
     } catch (err) {
       toast.error("Couldn't create preset", { description: err?.message });
     } finally {

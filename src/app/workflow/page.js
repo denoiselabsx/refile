@@ -16,6 +16,9 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { Play, Save, Sparkles, Trash2, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { useAuth } from "@/contexts/auth-context";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { WorkflowSidebar } from "@/components/workflow-sidebar";
@@ -112,19 +115,20 @@ function WorkflowCanvas() {
     [project, setNodes]
   );
 
+  const saveWorkflow = useMutation(api.workflows.save);
+  const { isAuthenticated } = useAuth();
+
   const handleSave = async () => {
+    if (!isAuthenticated) {
+      toast.error("Sign in to save workflows");
+      return;
+    }
     setIsSaving(true);
     try {
-      const workflow = {
-        name: workflowName,
-        nodes,
-        edges,
-        created_at: new Date().toISOString(),
-      };
-      localStorage.setItem("workflow_" + Date.now(), JSON.stringify(workflow));
+      await saveWorkflow({ name: workflowName, nodes, edges });
       toast.success("Workflow saved");
-    } catch {
-      toast.error("Couldn't save workflow");
+    } catch (err) {
+      toast.error("Couldn't save workflow", { description: err?.message });
     } finally {
       setIsSaving(false);
     }

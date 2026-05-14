@@ -1,94 +1,62 @@
+# ReFile
 
-# ReFile — Frontend
-
-A modern web application for file-based AI automation and community-driven command presets. Built with **Next.js 16**, **React 19**, **Tailwind CSS 4**, and **Convex**.
+AI-native file automation. Describe what you want, drop the file, get the exact shell command — and the result.
 
 A [Denoise Labs](https://denoiselabs.com) product.
 
-## Features
+## Stack
 
-- **AI File Automation**: Upload files and receive AI-generated Linux commands to process them.
-- **Preset Library**: Browse, search, and use community-contributed command presets for image, video, audio, and PDF processing.
-- **Preset Creation**: Authenticated users can create, edit, and share their own processing presets.
-- **Google Authentication**: Secure login via Google OAuth.
-- **User Dashboard**: Manage your uploads, view recent prompts, and track processing status.
-- **Like & Save Presets**: Like and save your favorite presets for quick access.
-- **Responsive UI**: Clean, modern interface with dark mode support.
+- **Next.js 16** (App Router) + **React 19** + **Tailwind CSS 4**
+- **Convex** — database, auth, realtime, file storage, server-side functions
+- **Vercel Sandbox** — ephemeral microVMs for running `ffmpeg`, `imagemagick`, `qpdf`, etc. on uploaded files
+- **Groq** — Llama 3.1 70B for natural-language → shell-command generation
+- **OpenAI Whisper** — voice transcription (optional, runs on a Next.js edge route)
 
-## Tech Stack
+## Repo layout
 
-- **Frontend**: Next.js 16, React 19, Tailwind CSS 4, Framer Motion, Lucide Icons
-- **Backend API**: FastAPI (expected, based on API calls)
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Google OAuth via Arctic
-- **State Management**: React Context API
-- **Other**: PostCSS, Shadcn UI, clsx, tailwind-merge
+```
+/                      Next.js app
+├── src/app/           Routes (App Router)
+├── src/components/    UI components + composer + shell
+├── src/contexts/      React contexts (auth)
+├── convex/            Convex backend — schema, queries, mutations, actions
+└── public/            Static assets
+```
 
-## Getting Started
+## Local development
 
-### Prerequisites
+```bash
+npm install
+npx convex dev          # logs into Convex, creates a deployment, writes NEXT_PUBLIC_CONVEX_URL
+npm run dev             # http://localhost:3000
+```
 
-- Node.js (v18+ recommended)
-- npm, yarn, pnpm, or bun
-- Supabase project (for database and authentication)
-- Backend API (FastAPI or compatible)
+## Environment variables
 
-### Installation
+Local `.env.local`:
 
-1. **Clone the repository:**
-	```bash
-	git clone <repo-url>
-	cd refile-frontend
-	```
+```
+NEXT_PUBLIC_CONVEX_URL=<from `npx convex dev`>
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+OPENAI_API_KEY=<optional; only needed if you want voice transcription>
+```
 
-2. **Install dependencies:**
-	```bash
-	npm install
-	# or
-	yarn install
-	```
+Convex deployment (set via `npx convex env set <KEY> <value>`):
 
-3. **Configure environment variables:**
-	- Create a `.env` file in the root with your Supabase and API credentials:
-	  ```
-	  NEXT_PUBLIC_API_URL=http://localhost:8000
-	  SUPABASE_URL=your_supabase_url
-	  SUPABASE_ANON_KEY=your_supabase_anon_key
-	  ```
+```
+AUTH_GOOGLE_ID=<Google OAuth client id>
+AUTH_GOOGLE_SECRET=<Google OAuth client secret>
+GROQ_API_KEY=<from console.groq.com>
+VERCEL_TOKEN=<from vercel.com/account/tokens>
+VERCEL_TEAM_ID=<from vercel.com team settings>
+VERCEL_PROJECT_ID=<from project settings>
+```
 
-4. **Run the development server:**
-	```bash
-	npm run dev
-	```
-	Open [http://localhost:3000](http://localhost:3000) in your browser.
+## Deployment
 
-### Database Setup
-
-- Run the SQL scripts in `src/db/schema.sql` and `src/db/add-foreign-keys.sql` on your Supabase/Postgres instance.
-- (Optional) Seed with sample presets using `src/db/sample-presets.sql`.
-
-## Project Structure
-
-- `src/app/` — Next.js app directory (pages, API routes, layouts)
-- `src/components/` — Reusable React components (UI, file upload, AI response, etc.)
-- `src/contexts/` — React context providers (auth, etc.)
-- `src/db/` — Database helpers, SQL schema, and sample data
-- `src/services/` — API service functions for backend communication
-- `src/hooks/` — Custom React hooks
-- `src/lib/` — Utility functions and server-side logic
-- `public/` — Static assets
-
-## Usage
-
-- **Upload files** and enter a prompt to get AI-generated commands and processed results.
-- **Browse and use presets** for common file operations.
-- **Create and share your own presets** (requires Google login).
-- **Like, save, and manage** your favorite presets.
-
-## Contributing
-
-Contributions are welcome! Please open issues or pull requests for improvements and bug fixes.
+Frontend deploys to Vercel automatically on push to `main`.
+Convex deploys with `npx convex deploy`.
 
 ## License
 
-[MIT](LICENSE)
+MIT
