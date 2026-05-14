@@ -64,6 +64,44 @@ function fmtSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Pick the best supported audio recording container. Order matters: opus
+// gives the best size/quality, mp4 is Safari's only option.
+function pickRecorderMime() {
+  if (typeof window === "undefined" || typeof MediaRecorder === "undefined") {
+    return "";
+  }
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
+  ];
+  for (const c of candidates) {
+    if (MediaRecorder.isTypeSupported?.(c)) return c;
+  }
+  return "";
+}
+
+function extForMime(mime) {
+  if (!mime) return "webm";
+  const m = mime.split(";")[0];
+  switch (m) {
+    case "audio/webm":
+      return "webm";
+    case "audio/ogg":
+      return "ogg";
+    case "audio/mp4":
+      return "m4a";
+    case "audio/mpeg":
+      return "mp3";
+    case "audio/wav":
+      return "wav";
+    default:
+      return "webm";
+  }
+}
+
 export function Composer({
   onSubmit,
   isBusy = false,
@@ -79,6 +117,22 @@ export function Composer({
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [language, setLanguage] = useState("auto");
+
+  // Persist the user's chosen language across sessions — multilingual users
+  // almost never want "auto" twice in a row.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem("refile.voiceLanguage");
+      if (saved) setLanguage(saved);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("refile.voiceLanguage", language);
+    } catch {}
+  }, [language]);
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -140,10 +194,25 @@ export function Composer({
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          // Improve recognizability of non-English speech: leave noise
+          // suppression on but disable aggressive AGC, which can mangle
+          // Indic tones.
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false,
+        },
+      });
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
-      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+      // Pick the best codec the browser actually supports. Safari only
+      // produces audio/mp4; Chrome/Firefox prefer opus-in-webm.
+      const mimeType = pickRecorderMime();
+      const mr = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = mr;
       mr.ondataavailable = (e) => {
         if (e.data?.size) audioChunksRef.current.push(e.data);
@@ -175,20 +244,36 @@ export function Composer({
       return;
     }
 
-    const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+    // Use whatever the recorder actually produced — Safari ignores the
+    // requested mimeType and returns audio/mp4, others return webm/opus.
+    const actualType = mr.mimeType || "audio/webm";
+    const blob = new Blob(audioChunksRef.current, { type: actualType });
     audioChunksRef.current = [];
+
+    if (blob.size < 1024) {
+      toast.error("Recording too short — hold to speak");
+      return;
+    }
 
     try {
       setIsTranscribing(true);
+      const ext = extForMime(actualType);
       const fd = new FormData();
-      fd.append("audio", blob, "recording.webm");
+      fd.append("audio", blob, `recording.${ext}`);
       fd.append("language", language);
       const res = await fetch("/api/transcribe", { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Transcription failed");
-      const { text } = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Transcription failed (${res.status})`);
+      }
+      const text = (data?.text || "").trim();
       if (text) {
         setPrompt((p) => (p ? `${p} ${text}` : text));
         toast.success("Transcribed");
+      } else {
+        toast.message("Nothing heard", {
+          description: "Try recording again — a bit closer to the mic.",
+        });
       }
     } catch (err) {
       toast.error("Couldn't transcribe", { description: err?.message });
@@ -370,21 +455,28 @@ export function Composer({
               </button>
             )}
 
-            {(isRecording || isTranscribing) && (
-              <Select value={language} onValueChange={setLanguage} disabled={isRecording}>
-                <SelectTrigger className="h-7 w-auto gap-1.5 border-0 bg-transparent px-2 text-[11.5px] text-muted-foreground hover:bg-muted">
-                  <Globe className="size-3" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGES.map((l) => (
-                    <SelectItem key={l.value} value={l.value}>
-                      {l.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            {/* Voice language — always visible so users can pick the language
+                before recording, not just during. */}
+            <Select
+              value={language}
+              onValueChange={setLanguage}
+              disabled={isRecording || isTranscribing}
+            >
+              <SelectTrigger
+                aria-label="Voice transcription language"
+                className="h-7 w-auto gap-1 border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground hover:bg-muted sm:gap-1.5 sm:px-2"
+              >
+                <Globe className="size-3" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {isTranscribing && (
               <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
