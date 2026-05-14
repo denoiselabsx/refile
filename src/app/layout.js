@@ -5,6 +5,7 @@ import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
 import { CommandPalette } from "@/components/command-palette";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -115,6 +116,7 @@ export default function RootLayout({ children }) {
               {children}
               <CommandPalette />
               <Toaster />
+              <Analytics />
             </AuthProvider>
           </ConvexClientProvider>
         </ThemeProvider>
