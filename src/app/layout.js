@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
 import { CommandPalette } from "@/components/command-palette";
 import { Analytics } from "@vercel/analytics/next";
+import { SITE, SITE_URL } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -27,52 +28,44 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-const SITE = {
-  name: "ReFile",
-  tagline: "AI-native file automation",
-  description:
-    "Describe what you want, drop the file. ReFile generates the exact shell command, runs it, and hands you the result.",
-  url: process.env.NEXT_PUBLIC_APP_URL || "https://refile.vercel.app",
-};
-
 export const metadata = {
-  metadataBase: new URL(SITE.url),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: `${SITE.name} — ${SITE.tagline}`,
     template: `%s — ${SITE.name}`,
   },
   description: SITE.description,
   applicationName: SITE.name,
-  keywords: [
-    "AI",
-    "file conversion",
-    "ffmpeg",
-    "imagemagick",
-    "shell commands",
-    "automation",
-    "natural language",
-  ],
-  authors: [{ name: "ReFile" }],
-  creator: "ReFile",
+  keywords: SITE.keywords,
+  authors: [{ name: SITE.publisher, url: SITE_URL }],
+  creator: SITE.publisher,
+  publisher: SITE.publisher,
+  category: "technology",
+  alternates: {
+    canonical: SITE_URL,
+  },
   openGraph: {
     type: "website",
     siteName: SITE.name,
     title: `${SITE.name} — ${SITE.tagline}`,
-    description: SITE.description,
-    url: SITE.url,
+    description: SITE.shortDescription,
+    url: SITE_URL,
+    locale: "en_US",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: SITE.name,
+        alt: `${SITE.name} — ${SITE.tagline}`,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
+    site: SITE.twitter,
+    creator: SITE.twitter,
     title: `${SITE.name} — ${SITE.tagline}`,
-    description: SITE.description,
+    description: SITE.shortDescription,
     images: ["/opengraph-image"],
   },
   icons: {
@@ -82,9 +75,22 @@ export const metadata = {
     ],
     apple: "/apple-icon.png",
   },
+  manifest: "/manifest.webmanifest",
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
   },
 };
 
@@ -97,6 +103,47 @@ export const viewport = {
   initialScale: 1,
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#org`,
+      name: SITE.publisher,
+      url: SITE_URL,
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/icon.svg`,
+      },
+      sameAs: [],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: SITE.name,
+      description: SITE.description,
+      publisher: { "@id": `${SITE_URL}/#org` },
+      inLanguage: "en-US",
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${SITE_URL}/#app`,
+      name: SITE.name,
+      url: SITE_URL,
+      description: SITE.description,
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Web",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      publisher: { "@id": `${SITE_URL}/#org` },
+    },
+  ],
+};
+
 export default function RootLayout({ children }) {
   return (
     <html
@@ -104,6 +151,12 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
       className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
     >
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body className="antialiased">
         <ThemeProvider
           attribute="class"
