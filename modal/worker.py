@@ -48,8 +48,10 @@ image = (
     )
     .pip_install("fastapi[standard]==0.115.0")
     # ImageMagick on Debian disables PDF/PS by default — re-enable.
+    # Also alias `magick` → `convert` so IM7-style commands work on IM6.
     .run_commands(
-        "sed -i 's|<policy domain=\"coder\" rights=\"none\" pattern=\"PDF\" />|<policy domain=\"coder\" rights=\"read|write\" pattern=\"PDF\" />|' /etc/ImageMagick-6/policy.xml || true"
+        "sed -i 's|<policy domain=\"coder\" rights=\"none\" pattern=\"PDF\" />|<policy domain=\"coder\" rights=\"read|write\" pattern=\"PDF\" />|' /etc/ImageMagick-6/policy.xml || true",
+        "ln -sf /usr/bin/convert /usr/local/bin/magick",
     )
 )
 
