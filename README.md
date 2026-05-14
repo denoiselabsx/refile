@@ -1,50 +1,94 @@
-# refile
 
-Monorepo for the Refile platform, combining the frontend and backend projects with full upstream history preserved via `git subtree`.
+# ReFile — Frontend
 
-## Repository Layout
+A modern web application for file-based AI automation and community-driven command presets. Built with **Next.js 16**, **React 19**, **Tailwind CSS 4**, and **Convex**.
 
-- `frontend/` - Next.js + React web app for AI-assisted file workflows, presets, auth, and dashboard UX.
-- `backend/` - FastAPI service for uploads, prompt persistence, AI command generation, and file access APIs.
+A [Denoise Labs](https://denoiselabs.com) product.
 
-## Upstream Sources
+## Features
 
-- Frontend source: https://github.com/SaiTeja-2101/refile-frontend
-- Backend source: https://github.com/YashvanthSankar/refile-backend
-
-## What the App Does
-
-- Upload files and submit prompts for AI-generated Linux/media-processing commands.
-- Run conversational follow-up processing requests.
-- Store prompt/file metadata in Supabase.
-- Support presets, user-specific history, and secure per-user file access patterns.
+- **AI File Automation**: Upload files and receive AI-generated Linux commands to process them.
+- **Preset Library**: Browse, search, and use community-contributed command presets for image, video, audio, and PDF processing.
+- **Preset Creation**: Authenticated users can create, edit, and share their own processing presets.
+- **Google Authentication**: Secure login via Google OAuth.
+- **User Dashboard**: Manage your uploads, view recent prompts, and track processing status.
+- **Like & Save Presets**: Like and save your favorite presets for quick access.
+- **Responsive UI**: Clean, modern interface with dark mode support.
 
 ## Tech Stack
 
-- Frontend: Next.js, React, Tailwind CSS, Supabase, Google OAuth flow.
-- Backend: FastAPI, Supabase, LangChain/LangGraph, Mistral AI integration.
+- **Frontend**: Next.js 16, React 19, Tailwind CSS 4, Framer Motion, Lucide Icons
+- **Backend API**: FastAPI (expected, based on API calls)
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Google OAuth via Arctic
+- **State Management**: React Context API
+- **Other**: PostCSS, Shadcn UI, clsx, tailwind-merge
 
-## Quick Start
+## Getting Started
 
-### Frontend (`frontend/`)
+### Prerequisites
 
-1. Configure `.env` with API + Supabase values.
-2. Install dependencies and run the dev server (see `frontend/README.md`).
-3. By default the app runs on `http://localhost:3000`.
+- Node.js (v18+ recommended)
+- npm, yarn, pnpm, or bun
+- Supabase project (for database and authentication)
+- Backend API (FastAPI or compatible)
 
-### Backend (`backend/`)
+### Installation
 
-1. Create and activate a Python virtual environment.
-2. Configure `.env` from `.env.example` with Supabase + Mistral credentials.
-3. Install requirements and run Uvicorn (see `backend/README.md`).
-4. By default the API runs on `http://localhost:8000`.
+1. **Clone the repository:**
+	```bash
+	git clone <repo-url>
+	cd refile-frontend
+	```
 
-## API Highlights (Backend)
+2. **Install dependencies:**
+	```bash
+	npm install
+	# or
+	yarn install
+	```
 
-- `POST /api/upload`
-- `POST /api/process`
-- `GET /api/list/{user_id}`
-- `GET /api/download/{user_id}/{stored_filename}`
-- `GET /api/health`
+3. **Configure environment variables:**
+	- Create a `.env` file in the root with your Supabase and API credentials:
+	  ```
+	  NEXT_PUBLIC_API_URL=http://localhost:8000
+	  SUPABASE_URL=your_supabase_url
+	  SUPABASE_ANON_KEY=your_supabase_anon_key
+	  ```
 
-Refer to `backend/README.md` and `frontend/README.md` for full setup details and project-specific notes.
+4. **Run the development server:**
+	```bash
+	npm run dev
+	```
+	Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Database Setup
+
+- Run the SQL scripts in `src/db/schema.sql` and `src/db/add-foreign-keys.sql` on your Supabase/Postgres instance.
+- (Optional) Seed with sample presets using `src/db/sample-presets.sql`.
+
+## Project Structure
+
+- `src/app/` — Next.js app directory (pages, API routes, layouts)
+- `src/components/` — Reusable React components (UI, file upload, AI response, etc.)
+- `src/contexts/` — React context providers (auth, etc.)
+- `src/db/` — Database helpers, SQL schema, and sample data
+- `src/services/` — API service functions for backend communication
+- `src/hooks/` — Custom React hooks
+- `src/lib/` — Utility functions and server-side logic
+- `public/` — Static assets
+
+## Usage
+
+- **Upload files** and enter a prompt to get AI-generated commands and processed results.
+- **Browse and use presets** for common file operations.
+- **Create and share your own presets** (requires Google login).
+- **Like, save, and manage** your favorite presets.
+
+## Contributing
+
+Contributions are welcome! Please open issues or pull requests for improvements and bug fixes.
+
+## License
+
+[MIT](LICENSE)
