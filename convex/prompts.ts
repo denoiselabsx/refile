@@ -70,6 +70,13 @@ export const get = query({
  *  Submit a new prompt (kicks off Groq + Sandbox via action)
  * ──────────────────────────────────────────────────────────────── */
 
+function sanitizeFilename(name: string): string {
+  // Replace anything that's not alphanumeric, dot, dash, or underscore with _
+  // Avoid empty result, leading dot, or filesystem-unfriendly chars.
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^\.+/, "");
+  return cleaned || "file";
+}
+
 export const submit = mutation({
   args: {
     prompt: v.string(),
@@ -80,11 +87,15 @@ export const submit = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not signed in");
 
+    // Sanitize filenames so shell-unfriendly chars don't trip up the worker.
+    // The AI then sees these clean names and references them directly.
+    const safeFilenames = args.inputFilenames.map(sanitizeFilename);
+
     const promptId = await ctx.db.insert("prompts", {
       userId,
       prompt: args.prompt,
       inputStorageIds: args.inputStorageIds,
-      inputFilenames: args.inputFilenames,
+      inputFilenames: safeFilenames,
       status: "pending",
     });
 
