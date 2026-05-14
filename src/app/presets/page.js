@@ -144,11 +144,9 @@ export default function PresetsListPage() {
           </div>
 
           <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <span className="inline-flex items-center gap-2">
-                <SlidersHorizontal className="size-3.5 text-muted-foreground" />
-                <SelectValue />
-              </span>
+            <SelectTrigger className="w-full sm:w-[200px]" aria-label="Sort presets">
+              <SlidersHorizontal className="size-3.5 shrink-0 text-muted-foreground" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {SORT_OPTIONS.map((o) => (
