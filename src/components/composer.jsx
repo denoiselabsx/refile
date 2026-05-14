@@ -110,9 +110,11 @@ export function Composer({
   // When true, file attachment is optional (e.g. follow-up in an existing chat
   // can reuse the previous turn's outputs).
   allowEmptyFiles = false,
+  // Optional initial prompt text (e.g. "Use preset" → preset name + description).
+  initialPrompt = "",
 }) {
   const [files, setFiles] = useState([]);
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [isDragging, setIsDragging] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);

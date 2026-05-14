@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
   Heart,
@@ -42,20 +41,16 @@ function formatDate(d) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function PresetCard({ preset, onLike, isLiked = false }) {
-  const [liked, setLiked] = useState(isLiked);
-  const [likeCount, setLikeCount] = useState(preset.likesCount || 0);
+export function PresetCard({ preset, onLike }) {
+  // Source of truth = the server, not local state. Convex pushes updates so
+  // the row will re-render with the new likesCount / isLiked anyway.
+  const liked = Boolean(preset.isLiked);
+  const likeCount = preset.likesCount || 0;
 
   const handleLike = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    try {
-      await onLike?.(preset._id);
-      setLiked((v) => !v);
-      setLikeCount((v) => (liked ? Math.max(0, v - 1) : v + 1));
-    } catch {
-      // parent handles toast
-    }
+    await onLike?.(preset._id);
   };
 
   return (

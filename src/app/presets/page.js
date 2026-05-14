@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { Search, Plus, SlidersHorizontal, Layers, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -30,11 +31,23 @@ const SORT_OPTIONS = [
 
 export default function PresetsListPage() {
   const { isAuthenticated } = useAuth();
+  const searchParams = useSearchParams();
+
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [category, setCategory] = useState(null);
   const [tags, setTags] = useState([]);
   const [sort, setSort] = useState("_creationTime:desc");
+
+  // Honor /presets?tag=foo deep links from preset detail pages.
+  useEffect(() => {
+    const tag = searchParams.get("tag");
+    if (tag && !tags.includes(tag)) setTags([tag]);
+    const cat = searchParams.get("category");
+    if (cat) setCategory(cat);
+    // Run once on mount based on URL; subsequent state-driven changes don't refire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 220);
@@ -43,7 +56,7 @@ export default function PresetsListPage() {
 
   const [sortBy, sortOrder] = sort.split(":");
 
-  const presets = useQuery(api.presets.list, {
+  const rawPresets = useQuery(api.presets.list, {
     search: debouncedSearch || undefined,
     category: category || undefined,
     tags: tags.length > 0 ? tags : undefined,
@@ -51,6 +64,18 @@ export default function PresetsListPage() {
     sortOrder,
     limit: 40,
   });
+
+  // Convex returns newest-first by default. For "Oldest" we reverse client-side
+  // rather than changing the query, since the result set is small.
+  const presets = useMemo(() => {
+    if (!rawPresets) return rawPresets;
+    if (sortBy === "_creationTime" && sortOrder === "asc") {
+      return [...rawPresets].sort(
+        (a, b) => a._creationTime - b._creationTime
+      );
+    }
+    return rawPresets;
+  }, [rawPresets, sortBy, sortOrder]);
 
   const categories = useQuery(api.presets.categories);
   const popularTags = useQuery(api.presets.popularTags, { limit: 10 });
@@ -228,7 +253,6 @@ export default function PresetsListPage() {
                   key={preset._id}
                   preset={preset}
                   onLike={handleLike}
-                  isLiked={preset.isLiked}
                 />
               ))}
             </div>
