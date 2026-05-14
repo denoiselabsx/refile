@@ -90,7 +90,7 @@ export default function DashboardPage() {
   if (isLoading || !isAuthenticated) {
     return (
       <AppShell mode="app">
-        <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
+        <div className="flex h-full items-center justify-center">
           <Skeleton className="size-8 rounded-full" />
         </div>
       </AppShell>
@@ -99,61 +99,115 @@ export default function DashboardPage() {
 
   const firstName = user?.name?.split(" ")[0] || "there";
 
+  const historyPanel = (
+    <>
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
+        <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+          <History className="size-3.5" />
+          History
+        </span>
+        <div className="flex items-center gap-1">
+          <Button size="icon-sm" variant="ghost" onClick={handleNewChat} aria-label="New chat">
+            <Plus className="size-3.5" />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => setHistoryOpen(false)}
+            aria-label="Close history"
+            className="lg:hidden"
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        {history === undefined ? (
+          <div className="space-y-2 px-1">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : history.length === 0 ? (
+          <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">
+            No conversations yet
+          </div>
+        ) : (
+          <ul className="space-y-0.5">
+            {history.map((item) => (
+              <li key={item._id}>
+                <button
+                  onClick={() => handleHistoryClick(item._id)}
+                  className="group w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
+                >
+                  <p className="line-clamp-1 text-[12.5px] font-medium text-foreground">
+                    {item.prompt}
+                  </p>
+                  <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                    {item.inputFilenames?.[0] || "—"} ·{" "}
+                    {new Date(item._creationTime).toLocaleDateString(
+                      undefined,
+                      { month: "short", day: "numeric" }
+                    )}
+                  </p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <AppShell mode="app">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
-        <aside className="hidden border-r border-border lg:flex lg:flex-col">
-          <div className="flex h-14 items-center justify-between border-b border-border px-4">
-            <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
-              <History className="size-3.5" />
-              History
-            </span>
-            <Button size="icon-sm" variant="ghost" onClick={handleNewChat} aria-label="New chat">
-              <Plus className="size-3.5" />
-            </Button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-2 py-3">
-            {history === undefined ? (
-              <div className="space-y-2 px-1">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : history.length === 0 ? (
-              <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">
-                No conversations yet
-              </div>
-            ) : (
-              <ul className="space-y-0.5">
-                {history.map((item) => (
-                  <li key={item._id}>
-                    <button
-                      onClick={() => handleHistoryClick(item._id)}
-                      className="group w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
-                    >
-                      <p className="line-clamp-1 text-[12.5px] font-medium text-foreground">
-                        {item.prompt}
-                      </p>
-                      <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-                        {item.inputFilenames?.[0] || "—"} ·{" "}
-                        {new Date(item._creationTime).toLocaleDateString(
-                          undefined,
-                          { month: "short", day: "numeric" }
-                        )}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      <div className="grid h-full grid-cols-1 lg:grid-cols-[260px_1fr]">
+        {/* Desktop history sidebar */}
+        <aside className="hidden h-full min-h-0 flex-col border-r border-border lg:flex">
+          {historyPanel}
         </aside>
 
-        <div className="flex min-h-screen flex-col">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border glass px-5">
-            <div className="flex items-center gap-2.5">
-              <MessageSquare className="size-4 text-muted-foreground" />
-              <h1 className="text-[14px] font-medium tracking-tight">
+        {/* Mobile history drawer */}
+        <AnimatePresence>
+          {historyOpen && (
+            <>
+              <motion.div
+                key="history-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm lg:hidden"
+                onClick={() => setHistoryOpen(false)}
+              />
+              <motion.aside
+                key="history-drawer"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="fixed inset-y-0 left-14 z-50 flex w-[min(80vw,300px)] flex-col border-r border-border bg-background lg:hidden"
+              >
+                {historyPanel}
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        <div className="flex h-full min-h-0 flex-col">
+          <header className="flex h-14 shrink-0 items-center justify-between border-b border-border glass px-3 sm:px-5">
+            <div className="flex items-center gap-1.5 sm:gap-2.5">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                onClick={() => setHistoryOpen(true)}
+                aria-label="Open history"
+                className="lg:hidden"
+              >
+                <Menu className="size-4" />
+              </Button>
+              <MessageSquare className="size-4 text-muted-foreground hidden sm:block" />
+              <h1 className="text-[13px] sm:text-[14px] font-medium tracking-tight">
                 {activePromptIds.length === 0
                   ? "New chat"
                   : `Chat · ${activePromptIds.length} ${
@@ -164,29 +218,34 @@ export default function DashboardPage() {
             {activePromptIds.length > 0 && (
               <Button size="sm" variant="ghost" onClick={handleNewChat}>
                 <Trash2 className="size-3.5" />
-                Clear
+                <span className="hidden sm:inline">Clear</span>
               </Button>
             )}
           </header>
 
-          <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-8">
-            {activePromptIds.length === 0 ? (
-              <WelcomeState firstName={firstName} />
-            ) : (
-              <div className="space-y-10">
-                <AnimatePresence initial={false}>
-                  {activePromptIds.map((id) => (
-                    <Turn key={id} promptId={id} />
-                  ))}
-                </AnimatePresence>
-              </div>
-            )}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto overscroll-contain"
+          >
+            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-5 sm:py-8">
+              {activePromptIds.length === 0 ? (
+                <WelcomeState firstName={firstName} />
+              ) : (
+                <div className="space-y-8 sm:space-y-10">
+                  <AnimatePresence initial={false}>
+                    {activePromptIds.map((id) => (
+                      <Turn key={id} promptId={id} />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="sticky bottom-0 border-t border-border bg-background/85 backdrop-blur">
-            <div className="mx-auto w-full max-w-3xl px-5 pb-6 pt-4">
+          <div className="shrink-0 border-t border-border bg-background/85 backdrop-blur">
+            <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-3 sm:px-5 sm:pb-6 sm:pt-4">
               <Composer onSubmit={handleSubmit} isBusy={isBusy} autoFocus />
-              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">
                 ReFile picks the right tool · always returns the command it ran
               </p>
             </div>
@@ -203,23 +262,23 @@ function WelcomeState({ firstName }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      className="mt-10"
+      className="mt-4 sm:mt-10"
     >
       <div className="flex items-center gap-3">
         <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-card">
           <Sparkles className="size-4" />
         </div>
         <div>
-          <h2 className="text-[20px] font-semibold tracking-tight">
+          <h2 className="text-[17px] sm:text-[20px] font-semibold tracking-tight">
             Hi {firstName} — what are we converting?
           </h2>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">
+          <p className="mt-1 text-[12.5px] sm:text-[13.5px] text-muted-foreground">
             Drop files anywhere on this page, then describe the outcome.
           </p>
         </div>
       </div>
 
-      <div className="mt-8 grid gap-2 sm:grid-cols-2">
+      <div className="mt-6 grid gap-2 sm:mt-8 sm:grid-cols-2">
         {[
           "Extract audio from this video as 192kbps MP3",
           "Resize these images to 1080p, save as WebP",
