@@ -204,9 +204,9 @@ export default function Home() {
             transition={{ duration: 0.55, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
             className="text-display mt-6 text-center text-balance"
           >
-            Convert anything.
+            Do anything to a file.
             <br />
-            <em className="text-muted-foreground">Just describe it.</em>
+            <em className="text-muted-foreground">Just say it.</em>
           </motion.h1>
 
           <motion.p
@@ -215,11 +215,12 @@ export default function Home() {
             transition={{ duration: 0.55, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
             className="mx-auto mt-6 max-w-2xl text-center text-[15px] leading-relaxed text-muted-foreground sm:text-[16px]"
           >
-            Compress, convert, resize, extract, merge, rotate, transcribe — any file,
-            in seconds. ReFile picks the right tool (ffmpeg, ImageMagick, Ghostscript,
-            and more), runs it in a sandbox, and shows you the exact command.
+            Convert, compress, resize, crop, rotate, merge, split, extract, transcribe,
+            redact, watermark, OCR — anything ffmpeg, ImageMagick, Ghostscript, or qpdf
+            can do, ReFile can do. Type or speak the result you want. We pick the tool,
+            run it in a sandbox, and show you the exact command.
             <span className="block mt-1.5 text-foreground/80">
-              No upload limits, no watermarks, no black box.
+              Any file. Any operation. No upload limits, no watermarks, no black box.
             </span>
           </motion.p>
 
