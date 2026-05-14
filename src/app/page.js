@@ -72,10 +72,11 @@ const CAPABILITIES = [
     examples: [
       "Resize all of these to 1080p, save as WebP",
       "Convert this PNG to PDF",
-      "Make this image grayscale",
+      "Add a watermark in the bottom-right",
+      "Strip EXIF and GPS metadata",
       "Crop a square from the center",
-      "Strip the EXIF metadata",
       "Compress JPEG to under 200 KB",
+      "Sharpen this slightly blurry photo",
     ],
   },
   {
@@ -87,8 +88,9 @@ const CAPABILITIES = [
       "Convert MOV to MP4 at 1080p",
       "Trim from 0:30 to 1:45",
       "Make a GIF from this clip",
-      "Extract the first frame as PNG",
-      "Add subtitles burned into the video",
+      "Burn subtitles into the video",
+      "Mute the audio",
+      "Speed it up 2×",
     ],
   },
   {
@@ -96,12 +98,12 @@ const CAPABILITIES = [
     title: "Audio",
     tool: "FFmpeg",
     examples: [
-      "Extract audio from this video as 192 kbps MP3",
-      "Convert WAV to MP3",
+      "Extract audio as 192 kbps MP3",
       "Trim silence from the start",
-      "Normalize loudness",
-      "Bump the speed by 1.5×",
-      "Convert FLAC to AAC",
+      "Normalize the loudness",
+      "Slow it down to 0.75× without pitch shift",
+      "Convert WAV to MP3",
+      "Fade in and out by 3 seconds",
     ],
   },
   {
@@ -115,6 +117,7 @@ const CAPABILITIES = [
       "Split each page into its own file",
       "Render page 1 as a PNG",
       "Remove the password",
+      "Rotate every page 90°",
     ],
   },
   {
@@ -124,7 +127,7 @@ const CAPABILITIES = [
     examples: [
       "Read the text from this scan",
       "OCR this image to a .txt file",
-      "Convert a screenshot to searchable text",
+      "Make a searchable PDF from these scans",
       "Extract Hindi text from this poster",
     ],
   },
@@ -134,9 +137,10 @@ const CAPABILITIES = [
     tool: "Pandoc",
     examples: [
       "Convert this DOCX to PDF",
-      "Markdown to HTML",
       "Markdown to a styled PDF",
-      "HTML to plain text",
+      "EPUB to plain text",
+      "HTML to Markdown",
+      "Strip all formatting",
     ],
   },
 ];
