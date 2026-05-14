@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
+import { CommandPalette } from "@/components/command-palette";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -110,6 +111,7 @@ export default function RootLayout({ children }) {
         >
           <AuthProvider>
             {children}
+            <CommandPalette />
             <Toaster />
           </AuthProvider>
         </ThemeProvider>

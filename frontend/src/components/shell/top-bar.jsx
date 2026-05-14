@@ -140,10 +140,20 @@ export function TopBar() {
 
           {/* Right cluster */}
           <div className="flex items-center gap-1.5 pl-1.5">
-            {/* Cmd-K hint (desktop only) */}
+            {/* Command palette trigger */}
             <button
               type="button"
               aria-label="Open command palette"
+              onClick={() => {
+                // Dispatch the same event the palette listens for
+                window.dispatchEvent(
+                  new KeyboardEvent("keydown", {
+                    key: "k",
+                    metaKey: true,
+                    ctrlKey: true,
+                  })
+                );
+              }}
               className="hidden h-8 items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 text-[11.5px] text-muted-foreground transition-colors hover:border-border-strong hover:bg-muted hover:text-foreground lg:inline-flex"
             >
               <span>Search</span>
