@@ -1,5 +1,6 @@
 "use client";
 
+// Metadata for this route is defined in presets/layout.js since page is "use client".
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -70,13 +71,19 @@ export default function PresetsListPage() {
           ...(category && { category }),
           ...(tags.length > 0 && { tags: JSON.stringify(tags) }),
         });
-        const res = await fetch(`/api/presets?${params}`);
-        const data = await res.json();
-        const items = data.presets || [];
+        const res = await fetch(`/api/presets?${params}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const data = await res.json().catch(() => ({}));
+        const items = Array.isArray(data.presets) ? data.presets : [];
         setPresets((prev) => (isFirstPage ? items : [...prev, ...items]));
         setHasMore(items.length === 20);
-      } catch (err) {
-        toast.error("Couldn't load presets");
+      } catch {
+        // Fail-soft: leave whatever's already on screen, surface a small toast
+        if (isFirstPage) {
+          setPresets([]);
+          setHasMore(false);
+          toast.error("Presets are unavailable right now");
+        }
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -98,18 +105,16 @@ export default function PresetsListPage() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const [cRes, tRes] = await Promise.all([
-          fetch("/api/presets/categories"),
-          fetch("/api/presets/tags"),
-        ]);
-        const c = await cRes.json();
-        const t = await tRes.json();
-        setCategories(c.categories || []);
-        setPopularTags(t.tags || []);
-      } catch {
-        // non-critical
-      }
+      const safeJson = (url) =>
+        fetch(url, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : {}))
+          .catch(() => ({}));
+      const [c, t] = await Promise.all([
+        safeJson("/api/presets/categories"),
+        safeJson("/api/presets/tags"),
+      ]);
+      setCategories(Array.isArray(c.categories) ? c.categories : []);
+      setPopularTags(Array.isArray(t.tags) ? t.tags : []);
     })();
   }, []);
 

@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
+import { Footer } from "@/components/shell/footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
@@ -109,7 +110,7 @@ export default function Home() {
           >
             Describe the file you want.
             <br />
-            <span className="text-muted-foreground">We write the command.</span>
+            <em className="text-muted-foreground">We write the command.</em>
           </motion.h1>
 
           <motion.p
@@ -171,8 +172,8 @@ export default function Home() {
       <section className="border-t border-border/70">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-h1 text-balance">
-              Built like a tool, not a toy.
+            <h2 className="text-h1-serif text-balance">
+              Built like a tool, <em className="text-muted-foreground">not a toy.</em>
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
               Every output is a real shell command on a real file. No hidden state,
@@ -204,7 +205,9 @@ export default function Home() {
       <section className="border-t border-border/70 bg-subtle/40">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-h1">Three steps. One file later.</h2>
+            <h2 className="text-h1-serif">
+              Three steps. <em className="text-muted-foreground">One file later.</em>
+            </h2>
           </div>
 
           <div className="mt-14 grid gap-8 md:grid-cols-3">
@@ -240,7 +243,9 @@ export default function Home() {
       {/* ───── CTA ───── */}
       <section className="border-t border-border/70">
         <div className="mx-auto max-w-3xl px-5 py-24 text-center">
-          <h2 className="text-h1 text-balance">Stop googling flags. Start shipping files.</h2>
+          <h2 className="text-h1-serif text-balance">
+            Stop googling flags. <em className="text-muted-foreground">Start shipping files.</em>
+          </h2>
           <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
             Sign in once. Save your favorite recipes. Build workflows.
           </p>
@@ -258,17 +263,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ───── Footer ───── */}
-      <footer className="border-t border-border/70">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-5 py-8 text-[12px] text-muted-foreground sm:flex-row">
-          <span>© {new Date().getFullYear()} ReFile</span>
-          <div className="flex items-center gap-5">
-            <Link href="#" className="transition-colors hover:text-foreground">Terms</Link>
-            <Link href="#" className="transition-colors hover:text-foreground">Privacy</Link>
-            <Link href="/presets" className="transition-colors hover:text-foreground">Presets</Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </AppShell>
   );
 }

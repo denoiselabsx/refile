@@ -9,9 +9,10 @@ import { LogoWordmark } from "@/components/brand/logo";
 import { useAuth } from "@/contexts/auth-context";
 
 const NAV = [
-  { href: "/", label: "Home" },
   { href: "/presets", label: "Presets" },
-  { href: "/workflow", label: "Workflows" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/docs", label: "Docs" },
+  { href: "/changelog", label: "Changelog" },
 ];
 
 export function TopBar() {

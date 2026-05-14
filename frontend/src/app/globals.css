@@ -88,10 +88,12 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo,
     Consolas, "Liberation Mono", monospace;
+  --font-serif: var(--font-serif), ui-serif, "Iowan Old Style", Georgia,
+    "Apple Garamond", "Times New Roman", serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -158,10 +160,15 @@ body {
  * ---------------------------------------------------------------- */
 
 .text-display {
-  font-size: clamp(2.5rem, 5vw + 1rem, 4.5rem);
-  line-height: 1.02;
-  letter-spacing: -0.035em;
-  font-weight: 600;
+  font-family: var(--font-serif);
+  font-size: clamp(2.75rem, 5.5vw + 1rem, 5rem);
+  line-height: 1;
+  letter-spacing: -0.025em;
+  font-weight: 400;
+}
+
+.text-display em {
+  font-style: italic;
 }
 
 .text-h1 {
@@ -169,6 +176,18 @@ body {
   line-height: 1.08;
   letter-spacing: -0.028em;
   font-weight: 600;
+}
+
+.text-h1-serif {
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 3vw + 0.5rem, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
 }
 
 .text-h2 {
