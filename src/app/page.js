@@ -13,6 +13,12 @@ import {
   ShieldCheck,
   Terminal,
   Sparkles,
+  Image as ImageIcon,
+  Video,
+  Music,
+  FileText,
+  ScanText,
+  FileCode,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { Footer } from "@/components/shell/footer";
@@ -52,6 +58,86 @@ const FEATURES = [
     icon: ShieldCheck,
     title: "Yours, end to end",
     body: "Your files, your account, your history. Google sign-in, encrypted sessions, downloadable artifacts.",
+  },
+];
+
+// Each card = one file type. Prompts are real things you can type into ReFile.
+// Listed prominently because each one is a high-intent SEO landing too
+// ("compress mp4", "extract audio from video", "merge pdfs", etc.).
+const CAPABILITIES = [
+  {
+    icon: ImageIcon,
+    title: "Images",
+    tool: "ImageMagick · Ghostscript",
+    examples: [
+      "Resize all of these to 1080p, save as WebP",
+      "Convert this PNG to PDF",
+      "Make this image grayscale",
+      "Crop a square from the center",
+      "Strip the EXIF metadata",
+      "Compress JPEG to under 200 KB",
+    ],
+  },
+  {
+    icon: Video,
+    title: "Video",
+    tool: "FFmpeg",
+    examples: [
+      "Compress this MP4 for WhatsApp",
+      "Convert MOV to MP4 at 1080p",
+      "Trim from 0:30 to 1:45",
+      "Make a GIF from this clip",
+      "Extract the first frame as PNG",
+      "Add subtitles burned into the video",
+    ],
+  },
+  {
+    icon: Music,
+    title: "Audio",
+    tool: "FFmpeg",
+    examples: [
+      "Extract audio from this video as 192 kbps MP3",
+      "Convert WAV to MP3",
+      "Trim silence from the start",
+      "Normalize loudness",
+      "Bump the speed by 1.5×",
+      "Convert FLAC to AAC",
+    ],
+  },
+  {
+    icon: FileText,
+    title: "PDFs",
+    tool: "Ghostscript · qpdf · Poppler",
+    examples: [
+      "Compress this PDF",
+      "Merge these three PDFs",
+      "Extract pages 2–5",
+      "Split each page into its own file",
+      "Render page 1 as a PNG",
+      "Remove the password",
+    ],
+  },
+  {
+    icon: ScanText,
+    title: "OCR & text",
+    tool: "Tesseract",
+    examples: [
+      "Read the text from this scan",
+      "OCR this image to a .txt file",
+      "Convert a screenshot to searchable text",
+      "Extract Hindi text from this poster",
+    ],
+  },
+  {
+    icon: FileCode,
+    title: "Documents",
+    tool: "Pandoc",
+    examples: [
+      "Convert this DOCX to PDF",
+      "Markdown to HTML",
+      "Markdown to a styled PDF",
+      "HTML to plain text",
+    ],
   },
 ];
 
@@ -118,20 +204,23 @@ export default function Home() {
             transition={{ duration: 0.55, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
             className="text-display mt-6 text-center text-balance"
           >
-            Describe the file you want.
+            Convert anything.
             <br />
-            <em className="text-muted-foreground">We write the command.</em>
+            <em className="text-muted-foreground">Just describe it.</em>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            className="mx-auto mt-6 max-w-2xl text-center text-[15px] leading-relaxed text-muted-foreground"
+            className="mx-auto mt-6 max-w-2xl text-center text-[15px] leading-relaxed text-muted-foreground sm:text-[16px]"
           >
-            ReFile turns natural language — typed or spoken — into runnable shell
-            pipelines for images, video, audio, PDFs, and documents.
-            Built for people who want the speed of AI without the opacity of a black box.
+            Compress, convert, resize, extract, merge, rotate, transcribe — any file,
+            in seconds. ReFile picks the right tool (ffmpeg, ImageMagick, Ghostscript,
+            and more), runs it in a sandbox, and shows you the exact command.
+            <span className="block mt-1.5 text-foreground/80">
+              No upload limits, no watermarks, no black box.
+            </span>
           </motion.p>
 
           <motion.div
@@ -175,6 +264,73 @@ export default function Home() {
           >
             <ShowcaseCard />
           </motion.div>
+        </div>
+      </section>
+
+      {/* ───── Capabilities — "what can I actually ask?" ───── */}
+      <section className="border-t border-border/70">
+        <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-h1-serif text-balance">
+              Try anything. <em className="text-muted-foreground">Really.</em>
+            </h2>
+            <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
+              ReFile speaks every file format that ffmpeg, ImageMagick, Ghostscript,
+              qpdf, Poppler, Tesseract, and Pandoc can touch — which is most of them.
+              Here are some of the things people ask for.
+            </p>
+          </div>
+
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {CAPABILITIES.map((cap) => {
+              const Icon = cap.icon;
+              return (
+                <Spotlight
+                  key={cap.title}
+                  className="surface group flex flex-col gap-3 p-5 transition-colors hover:border-border-strong"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-8 items-center justify-center rounded-md border border-border bg-card">
+                      <Icon className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-[14.5px] font-semibold tracking-tight">
+                        {cap.title}
+                      </h3>
+                      <p className="text-[11.5px] text-muted-foreground">
+                        {cap.tool}
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="space-y-1">
+                    {cap.examples.map((ex) => (
+                      <li
+                        key={ex}
+                        className="flex items-start gap-1.5 text-[12.5px] leading-relaxed text-muted-foreground"
+                      >
+                        <span
+                          aria-hidden
+                          className="mt-[7px] inline-block size-1 shrink-0 rounded-full bg-muted-foreground/40"
+                        />
+                        <span>“{ex}”</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Spotlight>
+              );
+            })}
+          </div>
+
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-[12.5px] text-muted-foreground">
+            <span>Don't see it?</span>
+            <Link
+              href="/login/google"
+              className="inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline"
+            >
+              Just ask. ReFile figures it out.
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
         </div>
       </section>
 
