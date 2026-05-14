@@ -9,11 +9,18 @@ import {
   Plus,
   History,
   Sparkles,
-  MessageSquare,
   Trash2,
-  Menu,
   X,
+  PanelLeft,
+  Layers,
+  Workflow,
+  MessageSquare,
+  Moon,
+  Sun,
+  LogOut,
+  Settings,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { Composer } from "@/components/composer";
@@ -21,23 +28,39 @@ import { AIResponse } from "@/components/ai-response";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 
 /**
  * ChatShell — shared layout for the dashboard chat experience.
- * Renders the sidebar list of chats, a header, the turn list, and a composer.
- *
- * Pass `chatId={null}` for the "new chat" landing (empty composer).
- * Pass `chatId="..."` to render an existing chat's turns and continue it.
+ * Mobile-first, Claude-grade polish: sticky composer with safe-area,
+ * slide-over history drawer, generous tap targets, no layout shift.
  */
 export function ChatShell({ chatId = null }) {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [isBusy, setIsBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const scrollRef = useRef(null);
+
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted && (resolvedTheme || theme) === "dark";
+
+  const initials = user?.name
+    ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+    : user?.email?.[0]?.toUpperCase() || "U";
 
   const chats = useQuery(
     api.chats.listMine,
@@ -55,7 +78,6 @@ export function ChatShell({ chatId = null }) {
     if (!isLoading && !isAuthenticated) router.replace("/");
   }, [isAuthenticated, isLoading, router]);
 
-  // Auto-scroll to bottom when a new turn arrives.
   useEffect(() => {
     if (scrollRef.current && chatData?.turns?.length) {
       scrollRef.current.scrollTo({
@@ -64,6 +86,17 @@ export function ChatShell({ chatId = null }) {
       });
     }
   }, [chatData?.turns?.length]);
+
+  // Lock body scroll when the mobile drawer is open
+  useEffect(() => {
+    if (historyOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [historyOpen]);
 
   const handleSubmit = async (files, prompt) => {
     if (!isAuthenticated) {
@@ -96,7 +129,6 @@ export function ChatShell({ chatId = null }) {
         chatId: chatId ?? undefined,
       });
 
-      // If we just created a chat, navigate to it.
       if (!chatId && result?.chatId) {
         router.push(`/dashboard/${result.chatId}`);
       }
@@ -134,12 +166,12 @@ export function ChatShell({ chatId = null }) {
 
   const historyPanel = (
     <>
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3 sm:px-4">
         <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
           <History className="size-3.5" />
           History
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <Button
             size="icon-sm"
             variant="ghost"
@@ -162,7 +194,33 @@ export function ChatShell({ chatId = null }) {
           </Button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-2 py-3">
+
+      {/* Cross-section nav — only on mobile; on desktop the icon rail handles it */}
+      <nav className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
+        <ul className="space-y-0.5">
+          {[
+            { href: "/dashboard", label: "Chats", icon: MessageSquare },
+            { href: "/presets", label: "Presets", icon: Layers },
+            { href: "/workflow", label: "Workflows", icon: Workflow },
+          ].map((it) => {
+            const Icon = it.icon;
+            return (
+              <li key={it.href}>
+                <Link
+                  href={it.href}
+                  onClick={() => setHistoryOpen(false)}
+                  className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  <Icon className="size-4 text-muted-foreground" />
+                  {it.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-3">
         {chats === undefined ? (
           <div className="space-y-2 px-1">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -170,30 +228,30 @@ export function ChatShell({ chatId = null }) {
             ))}
           </div>
         ) : chats.length === 0 ? (
-          <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">
+          <div className="px-3 py-10 text-center text-[12.5px] text-muted-foreground">
             No conversations yet
           </div>
         ) : (
-          <ul className="space-y-0.5">
+          <ul className="space-y-0.5" aria-label="Chat history">
             {chats.map((c) => {
               const active = c._id === chatId;
               return (
                 <li key={c._id}>
                   <div
                     className={cn(
-                      "group flex items-start rounded-md transition-colors",
+                      "group flex items-stretch rounded-md transition-colors",
                       active ? "bg-muted" : "hover:bg-muted/60"
                     )}
                   >
                     <Link
                       href={`/dashboard/${c._id}`}
                       onClick={() => setHistoryOpen(false)}
-                      className="min-w-0 flex-1 px-2.5 py-2 text-left outline-none focus:outline-none focus-visible:outline-none"
+                      className="min-w-0 flex-1 px-2.5 py-2.5 text-left outline-none focus:outline-none focus-visible:outline-none"
                     >
-                      <p className="line-clamp-1 text-[12.5px] font-medium text-foreground">
+                      <p className="line-clamp-1 text-[13px] font-medium text-foreground">
                         {c.title || "Untitled chat"}
                       </p>
-                      <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                      <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground">
                         {new Date(c.lastActivity).toLocaleDateString(
                           undefined,
                           { month: "short", day: "numeric" }
@@ -202,7 +260,7 @@ export function ChatShell({ chatId = null }) {
                     </Link>
                     <button
                       onClick={(e) => handleDeleteChat(c._id, e)}
-                      className="mr-1 mt-1 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                      className="mr-1 my-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
                       aria-label="Delete chat"
                     >
                       <Trash2 className="size-3.5" />
@@ -221,7 +279,7 @@ export function ChatShell({ chatId = null }) {
 
   return (
     <AppShell mode="app">
-      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 lg:grid-cols-[260px_1fr]">
+      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 lg:grid-cols-[280px_1fr]">
         {/* Desktop history sidebar */}
         <aside className="hidden h-full min-h-0 flex-col border-r border-border lg:flex">
           {historyPanel}
@@ -237,7 +295,7 @@ export function ChatShell({ chatId = null }) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm lg:hidden"
+                className="fixed inset-0 z-40 bg-background/70 backdrop-blur-sm lg:hidden"
                 onClick={() => setHistoryOpen(false)}
               />
               <motion.aside
@@ -245,8 +303,12 @@ export function ChatShell({ chatId = null }) {
                 initial={{ x: "-100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "-100%" }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                className="fixed inset-y-0 left-14 z-50 flex w-[min(80vw,300px)] flex-col border-r border-border bg-background lg:hidden"
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] flex-col border-r border-border bg-background shadow-2xl lg:hidden"
+                style={{
+                  paddingTop: "env(safe-area-inset-top)",
+                  paddingBottom: "env(safe-area-inset-bottom)",
+                }}
               >
                 {historyPanel}
               </motion.aside>
@@ -255,43 +317,97 @@ export function ChatShell({ chatId = null }) {
         </AnimatePresence>
 
         <div className="flex h-full min-h-0 flex-col">
-          <header className="flex h-14 shrink-0 items-center justify-between border-b border-border glass px-3 sm:px-5">
-            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+          {/* Header — glassy, sticky, with safe area */}
+          <header
+            className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border glass px-2 sm:px-5"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
+            <div className="flex min-w-0 items-center gap-1 sm:gap-2.5">
               <Button
-                size="icon-sm"
+                size="icon"
                 variant="ghost"
                 onClick={() => setHistoryOpen(true)}
                 aria-label="Open history"
                 className="lg:hidden"
               >
-                <Menu className="size-4" />
+                <PanelLeft className="size-[18px]" />
               </Button>
-              <MessageSquare className="hidden size-4 text-muted-foreground sm:block" />
-              <h1 className="truncate text-[13px] font-medium tracking-tight sm:text-[14px]">
-                {chat
-                  ? chat.title
-                  : chatId
-                    ? "Loading…"
-                    : "New chat"}
+              <h1 className="truncate pl-1 text-[14px] font-medium tracking-tight sm:pl-0 sm:text-[14.5px]">
+                {chat ? chat.title : chatId ? "Loading…" : "New chat"}
               </h1>
             </div>
-            {chat && (
+            <div className="flex items-center gap-0.5">
               <Button
-                size="sm"
+                size="icon"
                 variant="ghost"
-                onClick={(e) => handleDeleteChat(chat._id, e)}
+                asChild
+                aria-label="New chat"
+                className="lg:hidden"
               >
-                <Trash2 className="size-3.5" />
-                <span className="hidden sm:inline">Delete</span>
+                <Link href="/dashboard">
+                  <Plus className="size-[18px]" />
+                </Link>
               </Button>
-            )}
+              {chat && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => handleDeleteChat(chat._id, e)}
+                  className="hidden sm:inline-flex"
+                >
+                  <Trash2 className="size-3.5" />
+                  <span className="hidden sm:inline">Delete</span>
+                </Button>
+              )}
+
+              {/* Mobile-only account menu (theme, sign out) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Account menu"
+                    className="ml-0.5 inline-flex size-9 items-center justify-center rounded-md transition-colors hover:bg-muted lg:hidden"
+                  >
+                    <Avatar className="size-7">
+                      <AvatarImage src={user?.picture} alt={user?.name || "Account"} />
+                      <AvatarFallback className="text-[10.5px]">{initials}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-56">
+                  {user && (
+                    <>
+                      <DropdownMenuLabel className="normal-case tracking-normal text-foreground">
+                        <div className="flex flex-col">
+                          <span className="truncate text-[13px] font-medium">{user.name}</span>
+                          <span className="truncate text-[11.5px] font-normal text-muted-foreground">
+                            {user.email}
+                          </span>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={() => setTheme(isDark ? "light" : "dark")}>
+                    {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+                    {isDark ? "Light mode" : "Dark mode"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled>
+                    <Settings className="size-3.5" /> Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                    <LogOut className="size-3.5" /> Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </header>
 
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto overscroll-contain"
           >
-            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-5 sm:py-8">
+            <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
               {!inExistingChat ? (
                 <WelcomeState firstName={firstName} />
               ) : chatData === undefined ? (
@@ -305,7 +421,7 @@ export function ChatShell({ chatId = null }) {
                   description="It may have been deleted, or doesn't exist."
                 />
               ) : (
-                <div className="space-y-8 sm:space-y-10">
+                <div className="space-y-7 sm:space-y-10">
                   <AnimatePresence initial={false}>
                     {turns.map((t) => (
                       <Turn key={t._id} turn={t} />
@@ -316,8 +432,12 @@ export function ChatShell({ chatId = null }) {
             </div>
           </div>
 
-          <div className="shrink-0 border-t border-border bg-background/85 backdrop-blur">
-            <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-3 sm:px-5 sm:pb-6 sm:pt-4">
+          {/* Sticky composer dock — glass + safe area for iOS notch/home-bar */}
+          <div
+            className="shrink-0 border-t border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
+            <div className="mx-auto w-full max-w-3xl px-3 pb-3 pt-2.5 sm:px-6 sm:pb-5 sm:pt-4">
               <Composer
                 onSubmit={handleSubmit}
                 isBusy={isBusy}
@@ -325,8 +445,8 @@ export function ChatShell({ chatId = null }) {
                 allowEmptyFiles
                 placeholder={
                   inExistingChat && turns.length > 0
-                    ? "Follow up — ask anything, or describe a file operation…"
-                    : "Ask anything, or drop files and describe what to do…"
+                    ? "Follow up — ask anything…"
+                    : "Ask anything, or drop files…"
                 }
               />
               <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">
@@ -341,37 +461,38 @@ export function ChatShell({ chatId = null }) {
 }
 
 function WelcomeState({ firstName }) {
+  const suggestions = [
+    "Extract audio from this video as 192 kbps MP3",
+    "Resize these images to 1080p, save as WebP",
+    "Merge these PDFs and compress under 2 MB",
+    "Convert this MP4 to a 1080p H.264 video",
+  ];
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      className="mt-4 sm:mt-10"
+      className="mt-2 sm:mt-10"
     >
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-card">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+        <div className="flex size-10 items-center justify-center rounded-xl border border-border bg-card shadow-sm">
           <Sparkles className="size-4" />
         </div>
-        <div>
-          <h2 className="text-[17px] font-semibold tracking-tight sm:text-[20px]">
+        <div className="min-w-0">
+          <h2 className="text-balance text-[20px] font-semibold tracking-tight sm:text-[22px]">
             Hi {firstName} — what are we converting?
           </h2>
-          <p className="mt-1 text-[12.5px] text-muted-foreground sm:text-[13.5px]">
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground sm:text-[14px]">
             Drop files anywhere on this page, then describe the outcome.
           </p>
         </div>
       </div>
 
       <div className="mt-6 grid gap-2 sm:mt-8 sm:grid-cols-2">
-        {[
-          "Extract audio from this video as 192kbps MP3",
-          "Resize these images to 1080p, save as WebP",
-          "Merge these PDFs and compress under 2 MB",
-          "Convert this MP4 to a 1080p H.264 video",
-        ].map((s) => (
+        {suggestions.map((s) => (
           <div
             key={s}
-            className="surface px-4 py-3 text-[13px] leading-relaxed text-muted-foreground"
+            className="surface px-4 py-3 text-[13px] leading-relaxed text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
           >
             “{s}”
           </div>
@@ -388,12 +509,12 @@ function Turn({ turn }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className="space-y-6"
+      className="space-y-5 sm:space-y-6"
     >
-      {/* User message — right-aligned bubble, Claude-style */}
+      {/* User message */}
       <div className="flex justify-end">
         <div className="max-w-[85%] sm:max-w-[75%]">
-          <div className="rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground">
+          <div className="rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5 text-[14.5px] leading-relaxed text-foreground">
             {turn.prompt}
           </div>
           {turn.inputFilenames?.length > 0 && (
@@ -411,7 +532,7 @@ function Turn({ turn }) {
         </div>
       </div>
 
-      {/* AI message — left-aligned, no bubble, full width */}
+      {/* AI message */}
       <div className="flex items-start gap-2.5 sm:gap-3">
         <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
           <Sparkles className="size-3.5" />

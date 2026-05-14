@@ -60,7 +60,7 @@ export function AppSidebar() {
 
   return (
     <TooltipProvider>
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-14 flex-col border-r border-border bg-background/80 backdrop-blur-md">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-14 flex-col border-r border-border bg-background/80 backdrop-blur-md lg:flex">
         <div className="flex h-14 items-center justify-center">
           <Link href="/" aria-label="ReFile home" className="transition-opacity hover:opacity-80">
             <LogoMark size={22} />

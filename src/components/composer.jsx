@@ -229,7 +229,9 @@ export function Composer({
       <form
         onSubmit={handleSubmit}
         className={cn(
-          "surface relative w-full transition-all duration-150",
+          "relative w-full rounded-2xl border border-border bg-card/80 shadow-sm backdrop-blur",
+          "transition-all duration-150",
+          "focus-within:border-border-strong focus-within:shadow-md",
           isDragging && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background"
         )}
       >
@@ -240,7 +242,7 @@ export function Composer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/85 backdrop-blur"
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/85 backdrop-blur"
             >
               <div className="flex flex-col items-center gap-2 text-foreground">
                 <Paperclip className="size-5" />
@@ -259,7 +261,7 @@ export function Composer({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden border-b border-border"
             >
-              <div className="flex flex-wrap gap-2 p-3">
+              <div className="flex flex-wrap gap-2 p-2.5 sm:p-3">
                 {files.map((file, i) => {
                   const Icon = pickIcon(file);
                   return (
@@ -270,7 +272,7 @@ export function Composer({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.96 }}
                       transition={{ duration: 0.16 }}
-                      className="group inline-flex max-w-[260px] items-center gap-2 rounded-md border border-border bg-muted/60 px-2.5 py-1.5 text-[12px]"
+                      className="group inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1 text-[11.5px] sm:max-w-[260px] sm:gap-2 sm:px-2.5 sm:py-1.5 sm:text-[12px]"
                     >
                       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate font-medium" title={file.name}>
@@ -282,7 +284,7 @@ export function Composer({
                       <button
                         type="button"
                         onClick={() => removeFile(i)}
-                        className="ml-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                        className="ml-0.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
                         aria-label={`Remove ${file.name}`}
                       >
                         <X className="size-3.5" />
@@ -296,7 +298,7 @@ export function Composer({
         </AnimatePresence>
 
         {/* Textarea */}
-        <div className="px-4 pt-3.5">
+        <div className="px-3.5 pt-3 sm:px-4 sm:pt-3.5">
           <textarea
             ref={textareaRef}
             value={prompt}
@@ -306,7 +308,7 @@ export function Composer({
             disabled={isBusy || isTranscribing}
             rows={1}
             className={cn(
-              "block w-full resize-none bg-transparent text-[14px] leading-relaxed text-foreground placeholder:text-muted-foreground",
+              "block w-full resize-none bg-transparent text-[15px] leading-[1.5] text-foreground placeholder:text-muted-foreground sm:text-[14.5px]",
               "focus:outline-none disabled:opacity-60"
             )}
             style={{ minHeight: "24px" }}
@@ -314,19 +316,19 @@ export function Composer({
         </div>
 
         {/* Controls row */}
-        <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1.5 sm:px-2.5 sm:pb-2.5 sm:pt-2">
+          <div className="flex min-w-0 items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isBusy}
                   aria-label="Attach files"
                 >
-                  <Paperclip className="size-4" />
+                  <Paperclip className="size-[18px]" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Attach files</TooltipContent>
@@ -344,13 +346,13 @@ export function Composer({
                 <Button
                   type="button"
                   variant={isRecording ? "destructive" : "ghost"}
-                  size="icon-sm"
+                  size="icon"
                   onClick={() => (isRecording ? stopRecording(false) : startRecording())}
                   disabled={isBusy || isTranscribing}
                   aria-label={isRecording ? "Stop recording" : "Record"}
                   className={cn(isRecording && "animate-pulse-soft")}
                 >
-                  {isRecording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}
+                  {isRecording ? <Square className="size-[16px] fill-current" /> : <Mic className="size-[18px]" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -362,7 +364,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={() => stopRecording(true)}
-                className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                className="ml-1 rounded-md px-2 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 Cancel
               </button>
@@ -392,9 +394,9 @@ export function Composer({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {!isRecording && !isTranscribing && (
-              <span className="hidden text-[11px] text-muted-foreground sm:inline">
+              <span className="hidden text-[11px] text-muted-foreground md:inline">
                 {files.length === 0
                   ? "Drop files anywhere"
                   : `${files.length} file${files.length === 1 ? "" : "s"} attached`}
@@ -406,8 +408,9 @@ export function Composer({
               disabled={!canSend}
               aria-label="Send"
               loading={isBusy}
+              className="rounded-full"
             >
-              {!isBusy && <ArrowUp className="size-4" />}
+              {!isBusy && <ArrowUp className="size-[18px]" />}
             </Button>
           </div>
         </div>

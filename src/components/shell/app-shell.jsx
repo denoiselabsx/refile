@@ -6,11 +6,9 @@ import { useAuth } from "@/contexts/auth-context";
 
 /**
  * AppShell — single layout used across the app.
- * - Authed users get a thin icon sidebar.
- * - Guests get a top bar (used on marketing / public pages).
- *
- *  Pass `mode="marketing"` to force the top bar regardless of auth.
- *  Pass `mode="app"` to force the sidebar.
+ * - Authed: thin icon sidebar on lg+; on mobile, content is full-width
+ *   (chat surfaces handle their own header / nav).
+ * - Guests: top bar (marketing / public pages).
  */
 export function AppShell({ children, mode = "auto", className = "" }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -22,7 +20,7 @@ export function AppShell({ children, mode = "auto", className = "" }) {
     return (
       <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
         <AppSidebar />
-        <div className={`h-full pl-14 ${className}`}>{children}</div>
+        <div className={`h-full lg:pl-14 ${className}`}>{children}</div>
       </div>
     );
   }
