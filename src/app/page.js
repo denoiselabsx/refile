@@ -251,13 +251,13 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.32 }}
-            className="mt-4 flex items-center justify-center gap-2 text-[11.5px] text-muted-foreground"
+            className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 px-2 text-center text-[11.5px] text-muted-foreground"
           >
-            <span>No credit card.</span>
-            <span aria-hidden>·</span>
-            <span>Sign in with Google.</span>
-            <span aria-hidden>·</span>
-            <span>
+            <span className="whitespace-nowrap">No credit card.</span>
+            <span aria-hidden className="hidden sm:inline">·</span>
+            <span className="whitespace-nowrap">Sign in with Google.</span>
+            <span aria-hidden className="hidden sm:inline">·</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
               Press <Kbd>⌘</Kbd> <Kbd>K</Kbd> anywhere
             </span>
           </motion.div>
