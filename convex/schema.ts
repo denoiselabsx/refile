@@ -102,6 +102,42 @@ export default defineSchema({
     .index("by_chat", ["chatId", "turnIndex"])
     .index("by_status", ["status"]),
 
+  // Self-improving loop: distilled lessons learned from clustered job
+  // failures. The reviewFailures cron writes rows as "pending"; an admin
+  // approves/rejects. runJob only ever injects "approved" rows into the
+  // prompt — the hand-written SYSTEM_PROMPT is never mutated.
+  learnedLessons: defineTable({
+    // One-line human-readable summary of the failure pattern.
+    title: v.string(),
+    // The distilled lesson, written as an instruction the model can follow.
+    // This is what gets appended to the prompt when approved.
+    lesson: v.string(),
+    // Stable signature of the error cluster (e.g. tool + normalized error
+    // phrase). Used to dedupe so the cron doesn't re-file the same lesson.
+    signature: v.string(),
+    // Which sandbox tool the failures involved (imagemagick, ffmpeg, ...).
+    tool: v.string(),
+    // How many distinct failed prompts fed this lesson.
+    occurrences: v.number(),
+    // Example evidence so a human can judge without DB spelunking.
+    examplePrompt: v.string(),
+    exampleCommand: v.string(),
+    exampleError: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      // Superseded: the cron saw new occurrences and refreshed the row.
+      v.literal("superseded")
+    ),
+    // Audit trail for the human decision.
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_signature", ["signature"]),
+
   // Visual workflows on the canvas
   workflows: defineTable({
     userId: v.id("users"),

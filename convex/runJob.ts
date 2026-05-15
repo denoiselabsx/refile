@@ -574,12 +574,40 @@ export const runJob = internalAction({
         "\nIf the current request implicitly refers to the previous output (e.g. \"now make it grayscale\"), treat the previous turn's output filenames as the input filenames for this turn.\n"
       : "";
 
+    // Self-improving loop: append admin-APPROVED lessons distilled from
+    // past failure clusters. SYSTEM_PROMPT itself is never mutated; these
+    // are additive and gated by human review (see reviewFailures.ts).
+    let learnedBlock = "";
+    try {
+      const lessons = await ctx.runQuery(
+        internal.learnedLessons.approvedForPrompt,
+        {}
+      );
+      if (lessons.length) {
+        learnedBlock =
+          "\n\n══════════════════════════════════════════════════════════════════════\n" +
+          "LEARNED FIXES (verified from past failures — these OVERRIDE the\n" +
+          "recipe book if they conflict)\n" +
+          "══════════════════════════════════════════════════════════════════════\n" +
+          lessons
+            .map((l, i) => `${i + 1}. [${l.tool}] ${l.title}\n   ${l.lesson}`)
+            .join("\n");
+      }
+    } catch (err) {
+      // Never let the learning layer break command generation.
+      console.warn(
+        `[runJob] could not load learned lessons: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+
     let ai;
     try {
       const result = await generateObject({
         model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
         schema: AIResponse,
-        system: SYSTEM_PROMPT,
+        system: SYSTEM_PROMPT + learnedBlock,
         prompt:
           `User request: ${promptDoc.prompt}\n\nInput files:\n${promptDoc.inputFilenames
             .map((f, i) => `${i + 1}. ${f}`)
