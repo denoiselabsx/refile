@@ -332,7 +332,7 @@ Remove background (output MUST be .png for transparency):
   rembg i 'in.jpg' 'out.png'
   # output_files: ['out.png']  — tool: 'rembg'
   # The input extension can be jpg/png/webp; the OUTPUT must be .png.
-  # Do NOT pass any other flags — only the `i <input> <output>` form is
+  # Do NOT pass any other flags — only the \`i <input> <output>\` form is
   # supported. No model selection, no -a/alpha-matting flags.
 
 # DOCUMENTS — Pandoc, LibreOffice (headless), wkhtmltopdf
