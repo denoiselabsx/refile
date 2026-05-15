@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Paperclip,
-  Mic,
-  Square,
   ArrowUp,
   X,
   FileText,
@@ -13,18 +11,9 @@ import {
   Video,
   Music,
   File as FileIcon,
-  Globe,
-  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
@@ -32,21 +21,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-
-const LANGUAGES = [
-  { value: "auto", label: "Auto-detect" },
-  { value: "en", label: "English" },
-  { value: "hi", label: "हिन्दी · Hindi" },
-  { value: "ta", label: "தமிழ் · Tamil" },
-  { value: "te", label: "తెలుగు · Telugu" },
-  { value: "kn", label: "ಕನ್ನಡ · Kannada" },
-  { value: "ml", label: "മലയാളം · Malayalam" },
-  { value: "mr", label: "मराठी · Marathi" },
-  { value: "bn", label: "বাংলা · Bengali" },
-  { value: "gu", label: "ગુજરાતી · Gujarati" },
-  { value: "pa", label: "ਪੰਜਾਬੀ · Punjabi" },
-  { value: "ur", label: "اردو · Urdu" },
-];
 
 function pickIcon(file) {
   const t = file.type || "";
@@ -64,44 +38,6 @@ function fmtSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Pick the best supported audio recording container. Order matters: opus
-// gives the best size/quality, mp4 is Safari's only option.
-function pickRecorderMime() {
-  if (typeof window === "undefined" || typeof MediaRecorder === "undefined") {
-    return "";
-  }
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-    "audio/mp4;codecs=mp4a.40.2",
-    "audio/mp4",
-  ];
-  for (const c of candidates) {
-    if (MediaRecorder.isTypeSupported?.(c)) return c;
-  }
-  return "";
-}
-
-function extForMime(mime) {
-  if (!mime) return "webm";
-  const m = mime.split(";")[0];
-  switch (m) {
-    case "audio/webm":
-      return "webm";
-    case "audio/ogg":
-      return "ogg";
-    case "audio/mp4":
-      return "m4a";
-    case "audio/mpeg":
-      return "mp3";
-    case "audio/wav":
-      return "wav";
-    default:
-      return "webm";
-  }
-}
-
 export function Composer({
   onSubmit,
   isBusy = false,
@@ -116,31 +52,9 @@ export function Composer({
   const [files, setFiles] = useState([]);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [isDragging, setIsDragging] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [language, setLanguage] = useState("auto");
-
-  // Persist the user's chosen language across sessions — multilingual users
-  // almost never want "auto" twice in a row.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const saved = window.localStorage.getItem("refile.voiceLanguage");
-      if (saved) setLanguage(saved);
-    } catch {}
-  }, []);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem("refile.voiceLanguage", language);
-    } catch {}
-  }, [language]);
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const mediaStreamRef = useRef(null);
-  const audioChunksRef = useRef([]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -194,100 +108,8 @@ export function Composer({
     e.target.value = "";
   };
 
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          // Improve recognizability of non-English speech: leave noise
-          // suppression on but disable aggressive AGC, which can mangle
-          // Indic tones.
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-        },
-      });
-      mediaStreamRef.current = stream;
-      audioChunksRef.current = [];
-
-      // Pick the best codec the browser actually supports. Safari only
-      // produces audio/mp4; Chrome/Firefox prefer opus-in-webm.
-      const mimeType = pickRecorderMime();
-      const mr = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-      mediaRecorderRef.current = mr;
-      mr.ondataavailable = (e) => {
-        if (e.data?.size) audioChunksRef.current.push(e.data);
-      };
-      mr.start();
-      setIsRecording(true);
-    } catch {
-      toast.error("Microphone access denied");
-    }
-  }, []);
-
-  const stopRecording = useCallback(async (cancel = false) => {
-    const mr = mediaRecorderRef.current;
-    if (!mr) return;
-
-    const finalize = () =>
-      new Promise((resolve) => {
-        mr.onstop = () => resolve();
-        mr.stop();
-      });
-
-    await finalize();
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaStreamRef.current = null;
-    setIsRecording(false);
-
-    if (cancel || audioChunksRef.current.length === 0) {
-      audioChunksRef.current = [];
-      return;
-    }
-
-    // Use whatever the recorder actually produced — Safari ignores the
-    // requested mimeType and returns audio/mp4, others return webm/opus.
-    const actualType = mr.mimeType || "audio/webm";
-    const blob = new Blob(audioChunksRef.current, { type: actualType });
-    audioChunksRef.current = [];
-
-    if (blob.size < 1024) {
-      toast.error("Recording too short — hold to speak");
-      return;
-    }
-
-    try {
-      setIsTranscribing(true);
-      const ext = extForMime(actualType);
-      const fd = new FormData();
-      fd.append("audio", blob, `recording.${ext}`);
-      fd.append("language", language);
-      const res = await fetch("/api/transcribe", { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || `Transcription failed (${res.status})`);
-      }
-      const text = (data?.text || "").trim();
-      if (text) {
-        setPrompt((p) => (p ? `${p} ${text}` : text));
-        toast.success("Transcribed");
-      } else {
-        toast.message("Nothing heard", {
-          description: "Try recording again — a bit closer to the mic.",
-        });
-      }
-    } catch (err) {
-      toast.error("Couldn't transcribe", { description: err?.message });
-    } finally {
-      setIsTranscribing(false);
-    }
-  }, [language]);
-
   const canSend =
     !isBusy &&
-    !isRecording &&
-    !isTranscribing &&
     prompt.trim().length > 0 &&
     (allowEmptyFiles || files.length > 0);
 
@@ -392,7 +214,7 @@ export function Composer({
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={placeholder}
-            disabled={isBusy || isTranscribing}
+            disabled={isBusy}
             rows={1}
             className={cn(
               "block w-full resize-none bg-transparent text-[15px] leading-[1.5] text-foreground placeholder:text-muted-foreground sm:text-[14.5px]",
@@ -428,74 +250,14 @@ export function Composer({
               onChange={handleFileSelect}
             />
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={isRecording ? "destructive" : "ghost"}
-                  size="icon"
-                  onClick={() => (isRecording ? stopRecording(false) : startRecording())}
-                  disabled={isBusy || isTranscribing}
-                  aria-label={isRecording ? "Stop recording" : "Record"}
-                  className={cn(isRecording && "animate-pulse-soft")}
-                >
-                  {isRecording ? <Square className="size-[16px] fill-current" /> : <Mic className="size-[18px]" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isRecording ? "Stop & transcribe" : "Voice input"}
-              </TooltipContent>
-            </Tooltip>
-
-            {isRecording && (
-              <button
-                type="button"
-                onClick={() => stopRecording(true)}
-                className="ml-1 rounded-md px-2 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                Cancel
-              </button>
-            )}
-
-            {/* Voice language — always visible so users can pick the language
-                before recording, not just during. */}
-            <Select
-              value={language}
-              onValueChange={setLanguage}
-              disabled={isRecording || isTranscribing}
-            >
-              <SelectTrigger
-                aria-label="Voice transcription language"
-                className="h-7 w-auto gap-1 border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground hover:bg-muted sm:gap-1.5 sm:px-2"
-              >
-                <Globe className="size-3" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LANGUAGES.map((l) => (
-                  <SelectItem key={l.value} value={l.value}>
-                    {l.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {isTranscribing && (
-              <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-                <Loader2 className="size-3 animate-spin" />
-                Transcribing…
-              </span>
-            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {!isRecording && !isTranscribing && (
-              <span className="hidden text-[11px] text-muted-foreground md:inline">
-                {files.length === 0
-                  ? "Drop files anywhere"
-                  : `${files.length} file${files.length === 1 ? "" : "s"} attached`}
-              </span>
-            )}
+            <span className="hidden text-[11px] text-muted-foreground md:inline">
+              {files.length === 0
+                ? "Drop files anywhere"
+                : `${files.length} file${files.length === 1 ? "" : "s"} attached`}
+            </span>
             <Button
               type="submit"
               size="icon"
