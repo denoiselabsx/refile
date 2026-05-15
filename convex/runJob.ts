@@ -73,6 +73,7 @@ const AIResponse = z.object({
       "poppler",
       "pandoc",
       "tesseract",
+      "rembg",
       "other",
     ])
     .optional()
@@ -115,6 +116,7 @@ The sandbox is Debian slim with these binaries on PATH, and ONLY these:
   Images++:     cwebp, dwebp, gif2webp, img2webp, heif-convert, heif-info,
                 avifenc, avifdec, rsvg-convert, exiftool
   OCR:          tesseract (eng, hin, osd languages installed)
+  Bg removal:   rembg (AI background removal, u2net model, CPU)
   Archives:     zip, unzip, 7z, tar, gzip/gunzip, bzip2/bunzip2, xz/unxz
   Data:         jq, xmlstarlet, csvcut, csvjson, csvlook, csvstat, csvgrep,
                 csvsort, in2csv, csvformat
@@ -318,6 +320,20 @@ PDF → single combined PNG (pdftocairo can do single-page mode):
 Image → text:
   tesseract 'in.png' 'out' -l eng
   # produces out.txt → output_files: ['out.txt']
+
+# BACKGROUND REMOVAL — rembg (AI, u2net model)
+
+Removes the background from a photo (people, products, objects, full
+scenes) and outputs a transparent PNG. Works on complex backgrounds —
+this is the right tool when the user asks to "remove the background",
+"cut out the subject", "make it transparent", or "isolate the person".
+
+Remove background (output MUST be .png for transparency):
+  rembg i 'in.jpg' 'out.png'
+  # output_files: ['out.png']  — tool: 'rembg'
+  # The input extension can be jpg/png/webp; the OUTPUT must be .png.
+  # Do NOT pass any other flags — only the `i <input> <output>` form is
+  # supported. No model selection, no -a/alpha-matting flags.
 
 # DOCUMENTS — Pandoc, LibreOffice (headless), wkhtmltopdf
 

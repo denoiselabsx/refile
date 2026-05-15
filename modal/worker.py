@@ -90,6 +90,13 @@ image = (
     .pip_install(
         "fastapi[standard]==0.115.0",
         "csvkit==1.3.0",  # csvkit -> csvcut, csvjson, in2csv, etc.
+        # AI background removal. `rembg[cli]` installs the `rembg` console
+        # script, so the recipe book can call `rembg i in.jpg out.png`
+        # without invoking python directly (python is blocked by the
+        # Convex command validator). onnxruntime is the CPU inference
+        # backend — matches the cpu=2 worker config below.
+        "rembg[cli]==2.0.59",
+        "onnxruntime==1.19.2",
     )
     # ImageMagick on Debian disables PDF/PS/EPS by default for security.
     # Re-enable them by stripping policy lines that block these coders.
@@ -100,7 +107,18 @@ image = (
         "sed -i '/policy domain=\"coder\".*pattern=\"EPS\"/d' /etc/ImageMagick-6/policy.xml || true",
         "sed -i '/policy domain=\"coder\".*pattern=\"XPS\"/d' /etc/ImageMagick-6/policy.xml || true",
         "ln -sf /usr/bin/convert /usr/local/bin/magick",
+        # Bake the rembg u2net model (~170MB) into the image at build time.
+        # If we skip this, rembg downloads it on every cold start and we pay
+        # for that wall-clock time on each invocation. Baking it in means the
+        # model is already on disk — zero runtime download, predictable cost.
+        # U2NET_HOME must match the path rembg reads at runtime (set via the
+        # function env below).
+        "mkdir -p /models/u2net",
+        "U2NET_HOME=/models/u2net python -m rembg d u2net",
     )
+    # Persist the model path into the container env so the `rembg` CLI finds
+    # the baked-in model at runtime instead of downloading it.
+    .env({"U2NET_HOME": "/models/u2net"})
 )
 
 app = modal.App("refile-worker", image=image)
@@ -108,11 +126,23 @@ app = modal.App("refile-worker", image=image)
 EXEC_TIMEOUT_SECS = 240  # 4 minutes upper bound
 
 
+# Cost controls (Modal free credits ≈ $30/mo — we want to stay well under):
+#   - scaledown_window=60: kill idle containers after 60s instead of the
+#     default 300s. Bursty per-conversion traffic means a container would
+#     otherwise sit warm-but-idle for 5 min after each job, billing CPU/memory
+#     the whole time. 60s keeps a little warmth for back-to-back requests
+#     without paying for 5 minutes of nothing.
+#   - max_containers=4: hard ceiling on concurrency so a traffic spike (or a
+#     retry storm) can't silently fan out and drain the monthly credits.
+#   - U2NET_HOME points rembg at the model baked into the image at build
+#     time, so no per-invocation model download.
 @app.function(
     image=image,
     timeout=EXEC_TIMEOUT_SECS + 60,
     cpu=2,
     memory=2048,
+    scaledown_window=60,
+    max_containers=4,
     secrets=[modal.Secret.from_name("refile-worker", required_keys=[])],
 )
 @modal.fastapi_endpoint(method="POST", label="run")

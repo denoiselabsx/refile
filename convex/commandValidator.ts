@@ -64,6 +64,8 @@ const ALLOWED_BINARIES = new Set<string>([
   "exiftool",
   // ocr
   "tesseract",
+  // ai background removal (rembg console script; usage: `rembg i in out`)
+  "rembg",
   // archives
   "zip",
   "unzip",
