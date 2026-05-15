@@ -95,8 +95,19 @@ image = (
         # without invoking python directly (python is blocked by the
         # Convex command validator). onnxruntime is the CPU inference
         # backend — matches the cpu=2 worker config below.
+        #
+        # IMPORTANT — pinned deps: rembg[cli] 2.0.59 does NOT pin its
+        # transitive deps. A fresh install pulls a huggingface_hub so new
+        # that `HfFolder` was removed (gone since hub 0.26.0). The rembg
+        # CLI eagerly imports its `s` (server) command, which imports
+        # gradio, which imports `HfFolder` — so even `rembg i` crashes at
+        # startup with `ImportError: cannot import name 'HfFolder'`.
+        # Pin huggingface_hub to the last release that still exports
+        # HfFolder (0.25.2) and the matching last gradio 4.x (4.44.1).
         "rembg[cli]==2.0.59",
         "onnxruntime==1.19.2",
+        "huggingface_hub==0.25.2",
+        "gradio==4.44.1",
     )
     # ImageMagick on Debian disables PDF/PS/EPS by default for security.
     # Re-enable them by stripping policy lines that block these coders.
@@ -118,7 +129,8 @@ image = (
         # U2NET_HOME. `rembg` is the console script (`python -m rembg`
         # does NOT work — the package has no __main__).
         "mkdir -p /models/u2net",
-        "python -c \"from PIL import Image; Image.new('RGB',(1,1)).save('/tmp/seed.png')\"",
+        # 64x64 (not 1x1) — some rembg models error on degenerate sizes.
+        "python -c \"from PIL import Image; Image.new('RGB',(64,64),(127,127,127)).save('/tmp/seed.png')\"",
         "U2NET_HOME=/models/u2net rembg i /tmp/seed.png /tmp/seed_out.png",
     )
     # Persist the model path into the container env so the `rembg` CLI finds
