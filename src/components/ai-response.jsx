@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export function AIResponse({ prompt }) {
   const router = useRouter();
@@ -131,7 +132,7 @@ export function AIResponse({ prompt }) {
               )}
             </div>
             <div className="flex items-center gap-1.5">
-              {prompt.aiCommandTemplate && (
+              {!HIDE_LAUNCH_FEATURES && prompt.aiCommandTemplate && (
                 <Button
                   size="sm"
                   variant="ghost"

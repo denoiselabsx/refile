@@ -25,6 +25,30 @@ import {
   Lock,
 } from "lucide-react";
 
+/**
+ * Presets and Workflows are still in development. While the launch is in
+ * flight we hide them from production surfaces (nav, footer, command
+ * palette, sitemap, marketing CTAs) and 404 their routes — but keep them
+ * fully accessible in dev so we can keep building.
+ *
+ * To flip the launch: change this to `false` and redeploy. One file.
+ */
+export const HIDE_LAUNCH_FEATURES = process.env.NODE_ENV === "production";
+
+const HIDDEN_HREFS = new Set(["/presets", "/workflow"]);
+
+/**
+ * True when a nav href points to a feature that's currently hidden in
+ * production. Treats /presets/* and /workflow/* as hidden too.
+ */
+export function isHiddenLaunchHref(href) {
+  if (!HIDE_LAUNCH_FEATURES || !href) return false;
+  for (const hidden of HIDDEN_HREFS) {
+    if (href === hidden || href.startsWith(`${hidden}/`)) return true;
+  }
+  return false;
+}
+
 export const BRAND = {
   name: "ReFile",
   // Shown after the logo on marketing surfaces.
@@ -45,7 +69,7 @@ export const APP_NAV = [
   { href: "/dashboard", label: "Chat", icon: MessageSquare },
   { href: "/presets", label: "Presets", icon: Layers },
   { href: "/workflow", label: "Workflows", icon: Workflow },
-];
+].filter((item) => !isHiddenLaunchHref(item.href));
 
 /**
  * Marketing top-bar nav — public surfaces only.
@@ -55,7 +79,7 @@ export const MARKETING_NAV = [
   { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
   { href: "/changelog", label: "Changelog" },
-];
+].filter((item) => !isHiddenLaunchHref(item.href));
 
 /**
  * Footer columns — used on every marketing page.
@@ -70,7 +94,7 @@ export const FOOTER_COLUMNS = [
       { label: "Workflows", href: "/workflow" },
       { label: "Pricing", href: "/pricing" },
       { label: "Changelog", href: "/changelog" },
-    ],
+    ].filter((link) => !isHiddenLaunchHref(link.href)),
   },
   {
     title: "Resources",

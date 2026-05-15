@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
 import { useAuth } from "@/contexts/auth-context";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 const FEATURES = [
   {
@@ -239,9 +240,11 @@ export default function Home() {
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/presets">Browse presets</Link>
-            </Button>
+            {!HIDE_LAUNCH_FEATURES && (
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/presets">Browse presets</Link>
+              </Button>
+            )}
           </motion.div>
 
           <motion.div
@@ -433,9 +436,11 @@ export default function Home() {
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/presets">See community presets</Link>
-            </Button>
+            {!HIDE_LAUNCH_FEATURES && (
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/presets">See community presets</Link>
+              </Button>
+            )}
           </div>
         </div>
       </section>

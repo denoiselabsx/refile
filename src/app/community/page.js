@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "../../../convex/_generated/api";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 const CHANNELS = [
   {
@@ -71,11 +72,15 @@ const CONTRIBUTE = [
 ];
 
 export default function CommunityPage() {
-  const topPresets = useQuery(api.presets.list, {
-    limit: 6,
-    sortBy: "likes_count",
-    sortOrder: "desc",
-  });
+  const topPresets = useQuery(
+    api.presets.list,
+    HIDE_LAUNCH_FEATURES
+      ? "skip"
+      : { limit: 6, sortBy: "likes_count", sortOrder: "desc" }
+  );
+  const contributeItems = HIDE_LAUNCH_FEATURES
+    ? CONTRIBUTE.filter((c) => !c.href.startsWith("/presets"))
+    : CONTRIBUTE;
 
   return (
     <AppShell mode="marketing">
@@ -108,9 +113,11 @@ export default function CommunityPage() {
                 <ArrowRight className="size-4" />
               </a>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/presets">Browse community presets</Link>
-            </Button>
+            {!HIDE_LAUNCH_FEATURES && (
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/presets">Browse community presets</Link>
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -156,6 +163,7 @@ export default function CommunityPage() {
       </section>
 
       {/* Top presets */}
+      {!HIDE_LAUNCH_FEATURES && (
       <section className="border-t border-border/70 bg-subtle/40">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-5 sm:py-20">
           <div className="flex items-end justify-between gap-4">
@@ -230,6 +238,7 @@ export default function CommunityPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Contribute */}
       <section className="border-t border-border/70">
@@ -242,7 +251,7 @@ export default function CommunityPage() {
           </div>
 
           <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {CONTRIBUTE.map((c) => {
+            {contributeItems.map((c) => {
               const Icon = c.icon;
               return (
                 <Link

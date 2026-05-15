@@ -27,6 +27,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -157,19 +158,23 @@ export function CommandPalette() {
 
                 <Group heading="Navigate">
                   <Item onSelect={() => go("/")} icon={Home} label="Home" shortcut="G H" />
-                  <Item
-                    onSelect={() => go("/presets")}
-                    icon={Layers}
-                    label="Presets"
-                    hint="Community recipes"
-                    shortcut="G P"
-                  />
-                  <Item
-                    onSelect={() => go("/workflow")}
-                    icon={Workflow}
-                    label="Workflow builder"
-                    shortcut="G W"
-                  />
+                  {!HIDE_LAUNCH_FEATURES && (
+                    <>
+                      <Item
+                        onSelect={() => go("/presets")}
+                        icon={Layers}
+                        label="Presets"
+                        hint="Community recipes"
+                        shortcut="G P"
+                      />
+                      <Item
+                        onSelect={() => go("/workflow")}
+                        icon={Workflow}
+                        label="Workflow builder"
+                        shortcut="G W"
+                      />
+                    </>
+                  )}
                   <Item
                     onSelect={() => go("/pricing")}
                     icon={CreditCard}
@@ -199,11 +204,13 @@ export function CommandPalette() {
                       label="New chat"
                       shortcut="N"
                     />
-                    <Item
-                      onSelect={() => go("/presets/create")}
-                      icon={Plus}
-                      label="Create new preset"
-                    />
+                    {!HIDE_LAUNCH_FEATURES && (
+                      <Item
+                        onSelect={() => go("/presets/create")}
+                        icon={Plus}
+                        label="Create new preset"
+                      />
+                    )}
                   </Group>
                 )}
 

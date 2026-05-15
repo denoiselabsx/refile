@@ -35,18 +35,62 @@ import modal
 from fastapi import Request
 
 # ─── Image: Debian + all shell tools we generate commands for ──────────────
+#
+# Tool groups (kept aligned with the recipe book in convex/runJob.ts):
+#   core media:   ffmpeg, imagemagick, sox, lame, opus-tools, mkvtoolnix
+#   documents:    pandoc, libreoffice (headless), wkhtmltopdf, antiword, catdoc, pdftotext
+#   pdf:          qpdf, ghostscript, poppler-utils
+#   images++ :    webp, libheif-examples (heif-convert), libavif-bin, librsvg2-bin, exiftool
+#   ocr:          tesseract-ocr (+ extra langs)
+#   archives:     zip, unzip, p7zip-full, xz-utils, bzip2, gzip, tar (coreutils)
+#   data:         jq, csvkit (via pip), xmlstarlet
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install(
+        # core media
         "ffmpeg",
         "imagemagick",
+        "sox",
+        "libsox-fmt-all",
+        "lame",
+        "opus-tools",
+        "mkvtoolnix",
+        # documents
+        "pandoc",
+        "libreoffice",
+        "wkhtmltopdf",
+        "antiword",
+        "catdoc",
+        # pdf
         "qpdf",
         "ghostscript",
         "poppler-utils",
-        "pandoc",
+        # images++
+        "webp",
+        "libheif-examples",  # heif-convert, heif-info
+        "libavif-bin",       # avifenc, avifdec
+        "librsvg2-bin",      # rsvg-convert
+        "libimage-exiftool-perl",  # exiftool
+        # ocr (+ a few common extra languages — add more if needed)
         "tesseract-ocr",
+        "tesseract-ocr-eng",
+        "tesseract-ocr-hin",
+        "tesseract-ocr-osd",
+        # archives
+        "zip",
+        "unzip",
+        "p7zip-full",
+        "xz-utils",
+        "bzip2",
+        "gzip",
+        # data
+        "jq",
+        "xmlstarlet",
     )
-    .pip_install("fastapi[standard]==0.115.0")
+    .pip_install(
+        "fastapi[standard]==0.115.0",
+        "csvkit==1.3.0",  # csvkit -> csvcut, csvjson, in2csv, etc.
+    )
     # ImageMagick on Debian disables PDF/PS/EPS by default for security.
     # Re-enable them by stripping policy lines that block these coders.
     # Also alias `magick` → `convert` so IM7-style commands work on IM6.

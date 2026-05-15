@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/lib/site";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export default function robots() {
   return {
@@ -14,6 +15,7 @@ export default function robots() {
           "/workflow",
           "/login",
           "/login/",
+          ...(HIDE_LAUNCH_FEATURES ? ["/presets", "/presets/"] : []),
         ],
       },
     ],

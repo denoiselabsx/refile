@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Compass } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export const metadata = {
   title: "Not found — ReFile",
@@ -31,9 +32,11 @@ export default function NotFound() {
               <ArrowLeft className="size-3.5" /> Back home
             </Link>
           </Button>
-          <Button variant="outline" asChild>
-            <Link href="/presets">Browse presets</Link>
-          </Button>
+          {!HIDE_LAUNCH_FEATURES && (
+            <Button variant="outline" asChild>
+              <Link href="/presets">Browse presets</Link>
+            </Button>
+          )}
         </div>
       </div>
     </AppShell>

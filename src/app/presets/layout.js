@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { absoluteUrl } from "@/lib/site";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export const metadata = {
   title: "Presets",
@@ -21,5 +23,6 @@ export const metadata = {
 };
 
 export default function PresetsSegmentLayout({ children }) {
+  if (HIDE_LAUNCH_FEATURES) notFound();
   return children;
 }

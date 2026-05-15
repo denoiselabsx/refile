@@ -1,3 +1,6 @@
+import { notFound } from "next/navigation";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
+
 export const metadata = {
   title: "Workflows",
   description:
@@ -5,5 +8,6 @@ export const metadata = {
 };
 
 export default function WorkflowSegmentLayout({ children }) {
+  if (HIDE_LAUNCH_FEATURES) notFound();
   return children;
 }

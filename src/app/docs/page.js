@@ -13,6 +13,7 @@ import { AppShell } from "@/components/shell/app-shell";
 
 import { Badge } from "@/components/ui/badge";
 import { absoluteUrl } from "@/lib/site";
+import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export const metadata = {
   title: "Docs",
@@ -112,6 +113,10 @@ function Anchor({ id, title, children }) {
 }
 
 export default function DocsPage() {
+  const tocSections = HIDE_LAUNCH_FEATURES
+    ? TOC.filter((s) => s.title !== "Presets" && s.title !== "Workflows")
+    : TOC;
+
   return (
     <AppShell mode="marketing">
       <div className="relative overflow-hidden">
@@ -135,7 +140,7 @@ export default function DocsPage() {
         {/* Sticky TOC (desktop) + collapsible nav (mobile) */}
         <aside className="hidden lg:block">
           <nav className="sticky top-24 space-y-6">
-            {TOC.map((s) => {
+            {tocSections.map((s) => {
               const Icon = s.icon;
               return (
                 <div key={s.title}>
@@ -168,7 +173,7 @@ export default function DocsPage() {
             <ArrowRight className="size-3.5 transition-transform group-open:rotate-90" />
           </summary>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {TOC.flatMap((s) => s.items).map((it) => (
+            {tocSections.flatMap((s) => s.items).map((it) => (
               <a
                 key={it.href}
                 href={it.href}
@@ -358,6 +363,7 @@ export default function DocsPage() {
           </section>
 
           {/* Presets */}
+          {!HIDE_LAUNCH_FEATURES && (
           <section className="space-y-6">
             <header>
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -409,8 +415,10 @@ export default function DocsPage() {
               </p>
             </Anchor>
           </section>
+          )}
 
           {/* Workflows */}
+          {!HIDE_LAUNCH_FEATURES && (
           <section className="space-y-6">
             <header>
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -445,6 +453,7 @@ export default function DocsPage() {
               </p>
             </Anchor>
           </section>
+          )}
 
           {/* Account */}
           <section className="space-y-6">
