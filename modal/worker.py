@@ -107,14 +107,19 @@ image = (
         "sed -i '/policy domain=\"coder\".*pattern=\"EPS\"/d' /etc/ImageMagick-6/policy.xml || true",
         "sed -i '/policy domain=\"coder\".*pattern=\"XPS\"/d' /etc/ImageMagick-6/policy.xml || true",
         "ln -sf /usr/bin/convert /usr/local/bin/magick",
-        # Bake the rembg u2net model (~170MB) into the image at build time.
-        # If we skip this, rembg downloads it on every cold start and we pay
-        # for that wall-clock time on each invocation. Baking it in means the
-        # model is already on disk — zero runtime download, predictable cost.
-        # U2NET_HOME must match the path rembg reads at runtime (set via the
-        # function env below).
+        # Bake ONLY the rembg u2net model (~170MB) into the image at build
+        # time. If we skip this, rembg downloads it on every cold start and
+        # we pay for that wall-clock time on each invocation. Baking it in
+        # means the model is on disk already — zero runtime download.
+        #
+        # NOTE: `rembg d` exists but downloads *all* models (bloats the
+        # image, more cost). Instead we run one real cutout on a 1x1 pixel
+        # at build time: that lazily fetches *only* the u2net model into
+        # U2NET_HOME. `rembg` is the console script (`python -m rembg`
+        # does NOT work — the package has no __main__).
         "mkdir -p /models/u2net",
-        "U2NET_HOME=/models/u2net python -m rembg d u2net",
+        "python -c \"from PIL import Image; Image.new('RGB',(1,1)).save('/tmp/seed.png')\"",
+        "U2NET_HOME=/models/u2net rembg i /tmp/seed.png /tmp/seed_out.png",
     )
     # Persist the model path into the container env so the `rembg` CLI finds
     # the baked-in model at runtime instead of downloading it.
