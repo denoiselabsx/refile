@@ -229,15 +229,39 @@ Strip EXIF/metadata:
   magick 'in.jpg' -strip 'out_clean.jpg'
 
 # VIDEO / AUDIO — ffmpeg
+#
+# IMPORTANT defaults you MUST follow when encoding to H.264 (libx264):
+#   • libx264 with the standard yuv420p pixel format REQUIRES both
+#     dimensions to be even. Screen recordings, phone clips, and webm
+#     captures often have odd dimensions (e.g. 1920x955) and will fail
+#     with "height not divisible by 2". ALWAYS pass a scale filter that
+#     rounds to even: \`scale=trunc(iw/2)*2:trunc(ih/2)*2\` — and also set
+#     \`format=yuv420p\` for maximum player compatibility. Combine into
+#     one -vf: -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
+#   • If the input might not have an audio track (screencasts often
+#     don't), prefer \`-c:a copy\` over \`-c:a aac -b:a NNNk\` — copy is
+#     a no-op when there's no audio and avoids "Codec AVOption b not
+#     used" warnings. Use aac only when you specifically need to
+#     transcode audio.
 
-Re-encode video H.264 (good general compression, CRF 23):
-  ffmpeg -i 'in.mp4' -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 128k 'out_h264.mp4'
+Re-encode video H.264 (general compression, CRF 23 — handles odd
+dimensions and audio-less inputs):
+  ffmpeg -i 'in.mp4' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 23 -preset medium -c:a copy 'out_h264.mp4'
 
 Heavier video compression (smaller file, slight quality drop):
-  ffmpeg -i 'in.mp4' -c:v libx264 -crf 28 -preset slower -c:a aac -b:a 96k 'out_small.mp4'
+  ffmpeg -i 'in.mp4' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 28 -preset slower -c:a copy 'out_small.mp4'
 
-Resize video to 1080p height keeping aspect:
-  ffmpeg -i 'in.mp4' -vf "scale=-2:1080" -c:v libx264 -crf 23 -c:a copy 'out_1080p.mp4'
+Re-encode AND transcode audio to AAC (use only when source audio codec
+is incompatible with the target container, e.g. webm → mp4 with Opus):
+  ffmpeg -i 'in.webm' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 128k 'out_h264.mp4'
+
+Resize video to 1080p height keeping aspect (-2 keeps width auto and
+even — works correctly because -2 already enforces even):
+  ffmpeg -i 'in.mp4' -vf "scale=-2:1080,format=yuv420p" -c:v libx264 -crf 23 -c:a copy 'out_1080p.mp4'
+
+WebM → MP4 conversion (the common screencast case — VP8/VP9 video with
+no audio track, often odd dimensions):
+  ffmpeg -i 'in.webm' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 23 -preset medium -c:a copy 'out.mp4'
 
 Extract audio as 192 kbps MP3:
   ffmpeg -i 'in.mp4' -vn -b:a 192k 'out.mp3'
