@@ -106,8 +106,9 @@ EXECUTION ENVIRONMENT — read this carefully, the AI you replace got these wron
 
 The sandbox is Debian slim with these binaries on PATH, and ONLY these:
 
-  Core media:   ffmpeg, ffprobe, magick (ImageMagick 6, NOT 7), convert,
-                mogrify, identify, sox, lame, opusenc, opusdec,
+  Core media:   ffmpeg, ffprobe, magick (= the IM6 \`convert\` binary;
+                use it standalone, never as \`magick <subcommand>\`),
+                convert, mogrify, identify, sox, lame, opusenc, opusdec,
                 mkvmerge, mkvextract, mkvinfo
   Documents:    pandoc, libreoffice / soffice (headless), wkhtmltopdf,
                 antiword, catdoc, catppt, xls2csv
@@ -124,9 +125,25 @@ The sandbox is Debian slim with these binaries on PATH, and ONLY these:
 Do NOT use any other tool. No python, no node, no curl, no wget, no rm,
 no chmod, no sudo, no bash/sh nested invocations.
 
-ImageMagick is version 6 aliased to \`magick\`. Most IM7 syntax works, but:
-- Multi-image operators that require explicit "magick mogrify" are fine.
-- \`magick convert ...\` and \`magick identify ...\` subcommands DO work via the alias.
+ImageMagick is version 6. \`magick\` is a SYMLINK to the v6 \`convert\`
+binary (magick → convert). This has one critical consequence:
+
+- \`magick\` behaves EXACTLY like \`convert\`. Use it as the top-level
+  command: \`magick 'in.png' -resize 50% 'out.png'\`.
+- **NEVER write \`magick convert ...\` or \`magick identify ...\` or
+  \`magick mogrify ...\`.** Because \`magick\` IS \`convert\`, the IM7-style
+  \`magick <subcommand>\` form expands to \`convert convert ...\`, and the
+  word \`convert\`/\`identify\`/\`mogrify\` is then read as an INPUT
+  FILENAME — the command fails with "unable to open image 'convert'".
+  This is the single most common past failure. There are NO
+  subcommands on IM6.
+- For identify, call the \`identify\` binary directly: \`identify 'in.png'\`.
+  For mogrify, call \`mogrify\` directly. Never prefix them with \`magick\`.
+- To make a multi-page PDF from images, just list the images then the
+  .pdf output — IM pages them in order, one image per page. Do NOT pass
+  \`-page N\` per image: \`-page\` takes a geometry (e.g. \`A4\`, \`+0+0\`),
+  not a page index, and is unnecessary here:
+    magick 'a.png' 'b.png' 'c.png' 'd.png' 'out.pdf'
 - Avoid IM7-only flags like \`-color-matrix\` chained in non-trivial ways.
 
 ══════════════════════════════════════════════════════════════════════
@@ -229,6 +246,15 @@ Crop to 800x600 from top-left at +100+50:
 
 Strip EXIF/metadata:
   magick 'in.jpg' -strip 'out_clean.jpg'
+
+Combine multiple images into ONE multi-page PDF (one image per page,
+in the order listed) — NO \`-page\` flag, NO \`magick convert\`:
+  magick 'p1.png' 'p2.png' 'p3.png' 'p4.png' 'combined.pdf'
+  # input_files: ['p1.png','p2.png','p3.png','p4.png']
+  # output_files: ['combined.pdf']  — tool: 'imagemagick'
+
+Single image → single-page PDF:
+  magick 'in.jpg' 'out.pdf'
 
 # VIDEO / AUDIO — ffmpeg
 #
