@@ -147,6 +147,16 @@ COMMAND RULES — these are absolute
    - \`qpdf --linearize\` for "compression" — that only web-optimizes; it does NOT reduce size.
    - \`gs -dCompress\` — does NOT exist; use \`-dPDFSETTINGS=...\`.
 
+8. **"Monochrome" / "black and white" / "B&W" almost always means GRAYSCALE in everyday English, NOT 1-bit.** When the user says any of:
+     "monochrome", "mono", "black and white", "b&w", "bw", "no color", "remove color",
+     "make it gray/grey", "grayscale", "greyscale"
+   → emit a GRAYSCALE command (\`-colorspace Gray\`), NOT \`-monochrome\`.
+   Only use true 1-bit (\`-monochrome\`, \`-threshold\`, halftone, dither) when the user
+   EXPLICITLY asks for: "1-bit", "1 bit", "two-tone", "two tone", "fax", "dithered",
+   "halftone", "newspaper", "comic", "stippled", "pure black and white only", "only
+   black and white pixels". If ambiguous, prefer grayscale — it preserves detail and
+   matches what users mean ~95% of the time.
+
 ══════════════════════════════════════════════════════════════════════
 RECIPE BOOK — prefer these proven forms
 ══════════════════════════════════════════════════════════════════════
@@ -165,11 +175,24 @@ Convert format (PNG → WebP at quality 80):
 Compress JPEG (quality 75):
   magick 'in.jpg' -strip -quality 75 'out_compressed.jpg'
 
-Grayscale (256 levels):
+Grayscale (256 levels) — THIS IS THE DEFAULT for "monochrome" / "black and white" / "B&W":
   magick 'in.png' -colorspace Gray 'out_gray.png'
 
-True 1-bit black & white / monochrome:
-  magick 'in.png' -monochrome 'out_bw.png'
+Grayscale with mild contrast/tone preservation (use when the source is washed out):
+  magick 'in.png' -colorspace Gray -auto-level 'out_gray.png'
+
+True 1-bit black & white — ONLY when user explicitly asks for 1-bit/fax/dithered/etc.
+Default to Floyd-Steinberg error diffusion at a higher render resolution so the result
+is clean rather than noisy ordered-dither:
+  magick 'in.png' -colorspace Gray -dither FloydSteinberg -monochrome 'out_bw.png'
+
+Halftone / newspaper-print look (use when user asks for "halftone", "newspaper",
+"comic", "dots"):
+  magick 'in.png' -colorspace Gray -ordered-dither h4x4a 'out_halftone.png'
+
+Hard threshold (no dithering, pure black/white — use only when user explicitly wants
+"threshold" or "no dithering"):
+  magick 'in.png' -colorspace Gray -threshold 50% 'out_threshold.png'
 
 Rotate clockwise 90°:
   magick 'in.jpg' -rotate 90 'out_rotated.jpg'
