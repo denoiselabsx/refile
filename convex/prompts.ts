@@ -71,9 +71,16 @@ export const get = query({
  * ──────────────────────────────────────────────────────────────── */
 
 function sanitizeFilename(name: string): string {
-  // Replace anything that's not alphanumeric, dot, dash, or underscore with _
-  // Avoid empty result, leading dot, or filesystem-unfriendly chars.
-  const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^\.+/, "");
+  // Replace anything that's not alphanumeric, dot, dash, or underscore with _.
+  // Then strip any leading dots/dashes: a leading "." is a hidden file, and a
+  // leading "-" makes the name look like a CLI flag to GNU/Click-style arg
+  // parsers (rembg, ffmpeg, magick, gs, ...). Single-quoting in the shell does
+  // NOT protect against this — the tool's own parser still sees the dash and
+  // fails with e.g. `Error: No such option: -7`. Neutralize it here, once, so
+  // every downstream command is safe regardless of what the AI generates.
+  const cleaned = name
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .replace(/^[.\-]+/, "");
   return cleaned || "file";
 }
 

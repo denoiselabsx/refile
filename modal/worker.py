@@ -210,7 +210,16 @@ async def run(request: Request):
     with tempfile.TemporaryDirectory(prefix="refile-") as workdir:
         for upload in uploads:
             filename = upload.filename
-            if not filename or "/" in filename or filename.startswith("."):
+            # Reject "/", leading ".", and leading "-". A leading dash makes
+            # the name parse as a CLI flag inside the command (e.g. rembg's
+            # Click parser → "Error: No such option: -7"); quoting in bash
+            # does not stop the tool's own argument parser.
+            if (
+                not filename
+                or "/" in filename
+                or filename.startswith(".")
+                or filename.startswith("-")
+            ):
                 raise HTTPException(
                     status_code=400, detail=f"bad filename {filename!r}"
                 )
