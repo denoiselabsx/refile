@@ -22,6 +22,8 @@ export function AppShell({
   mode = "auto",
   className = "",
   withFooter,
+  appSidebarNavExtra = null,
+  appSidebarFooterExtra = null,
 }) {
   const { isAuthenticated } = useAuth();
 
@@ -36,7 +38,10 @@ export function AppShell({
   if (effectiveMode === "app") {
     return (
       <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
-        <AppSidebar />
+        <AppSidebar
+          navExtraContent={appSidebarNavExtra}
+          footerExtraContent={appSidebarFooterExtra}
+        />
         <div className={`h-full lg:pl-14 ${className}`}>{children}</div>
         {showFooter && <Footer />}
         <OnboardingFlow />

@@ -204,6 +204,8 @@ export function AIResponse({ prompt }) {
                       <a
                         href={out.url}
                         download={out.filename}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       >
                         <Download className="size-3.5" />

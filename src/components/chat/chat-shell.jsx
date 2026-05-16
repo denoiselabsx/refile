@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,8 @@ import {
   Sun,
   LogOut,
   Settings,
+  Upload,
+  Download,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -40,6 +42,12 @@ import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { APP_NAV } from "@/lib/nav";
 
+function fileTypeLabel(filename) {
+  const parts = filename.split(".");
+  if (parts.length < 2) return "FILE";
+  return parts.pop().slice(0, 6).toUpperCase();
+}
+
 /**
  * ChatShell — shared layout for the dashboard chat experience.
  * Mobile-first, Claude-grade polish: sticky composer with safe-area,
@@ -51,9 +59,14 @@ export function ChatShell({ chatId = null }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [isBusy, setIsBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [uploadsOpen, setUploadsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState("");
+  const [uploads, setUploads] = useState([]);
+  const [uploading, setUploading] = useState([]);
+  const [uploadsDragActive, setUploadsDragActive] = useState(false);
   const scrollRef = useRef(null);
+  const uploadsInputRef = useRef(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -72,16 +85,21 @@ export function ChatShell({ chatId = null }) {
   const isDark = mounted && (resolvedTheme || theme) === "dark";
 
   const initials = user?.name
-    ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+    ? user.name
+        .split(" ")
+        .map((p) => p[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
     : user?.email?.[0]?.toUpperCase() || "U";
 
   const chats = useQuery(
     api.chats.listMine,
-    isAuthenticated ? { limit: 50 } : "skip"
+    isAuthenticated ? { limit: 50 } : "skip",
   );
   const chatData = useQuery(
     api.chats.get,
-    isAuthenticated && chatId ? { id: chatId } : "skip"
+    isAuthenticated && chatId ? { id: chatId } : "skip",
   );
   const generateUploadUrl = useMutation(api.prompts.generateUploadUrl);
   const submit = useMutation(api.prompts.submit);
@@ -100,45 +118,182 @@ export function ChatShell({ chatId = null }) {
     }
   }, [chatData?.turns?.length]);
 
-  // Lock body scroll when the mobile drawer is open
+  // Lock body scroll when a mobile drawer is open
   useEffect(() => {
-    if (historyOpen) {
+    if (historyOpen || uploadsOpen) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = prev;
       };
     }
-  }, [historyOpen]);
+  }, [historyOpen, uploadsOpen]);
 
-  const handleSubmit = async (files, prompt) => {
+  const openHistory = () => {
+    setUploadsOpen(false);
+    setHistoryOpen(true);
+  };
+
+  const openUploads = () => {
+    setHistoryOpen(false);
+    setUploadsOpen(true);
+  };
+
+  const upsertFiles = (items) => {
+    if (!items?.length) return;
+    setUploads((prev) => {
+      const next = [...prev];
+      for (const item of items) {
+        const dupIdx = next.findIndex(
+          (f) =>
+            (item.storageId && f.storageId === item.storageId) ||
+            f.filename.toLowerCase() === item.filename.toLowerCase(),
+        );
+        if (dupIdx >= 0) next[dupIdx] = { ...next[dupIdx], ...item };
+        else next.push(item);
+      }
+      return next;
+    });
+  };
+
+  const handleUploadFiles = async (incomingFiles) => {
+    const files = Array.from(incomingFiles || []);
+    if (files.length === 0) return;
+    const existingLocalIds = new Set([
+      ...uploads.map((u) => u.localId).filter(Boolean),
+      ...uploading.map((u) => u.localId).filter(Boolean),
+    ]);
+
+    for (const file of files) {
+      const localId = `${file.name}-${file.size}-${file.lastModified}`;
+      if (existingLocalIds.has(localId)) continue;
+      existingLocalIds.add(localId);
+
+      setUploading((prev) => [
+        ...prev,
+        { localId, filename: file.name, kind: "input", progress: 0 },
+      ]);
+
+      try {
+        const uploadUrl = await generateUploadUrl();
+        const { storageId } = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", uploadUrl);
+          xhr.setRequestHeader(
+            "Content-Type",
+            file.type || "application/octet-stream",
+          );
+          xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const progress = Math.max(
+              2,
+              Math.min(100, Math.round((event.loaded / event.total) * 100)),
+            );
+            setUploading((prev) =>
+              prev.map((u) => (u.localId === localId ? { ...u, progress } : u)),
+            );
+          };
+          xhr.onload = () => {
+            if (xhr.status < 200 || xhr.status >= 300) {
+              reject(new Error(`Upload failed (${xhr.status})`));
+              return;
+            }
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch {
+              reject(new Error("Upload completed but response was invalid"));
+            }
+          };
+          xhr.onerror = () => reject(new Error("Network error during upload"));
+          xhr.send(file);
+        });
+        upsertFiles([
+          { storageId, filename: file.name, kind: "input", localId },
+        ]);
+        setUploading((prev) => prev.filter((u) => u.localId !== localId));
+      } catch (err) {
+        setUploading((prev) => prev.filter((u) => u.localId !== localId));
+        toast.error(`Upload failed for ${file.name}`, {
+          description: err?.message,
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!chatData?.turns?.length) return;
+    const discovered = [];
+    for (const turn of chatData.turns) {
+      if (turn.inputStorageIds?.length && turn.inputFilenames?.length) {
+        for (let i = 0; i < turn.inputFilenames.length; i++) {
+          discovered.push({
+            storageId: turn.inputStorageIds[i],
+            filename: turn.inputFilenames[i],
+            kind: "input",
+          });
+        }
+      }
+      if (turn.outputUrls?.length) {
+        for (const out of turn.outputUrls) {
+          discovered.push({
+            storageId: out.storageId,
+            filename: out.filename,
+            kind: "output",
+            url: out.url,
+          });
+        }
+      }
+    }
+    upsertFiles(discovered);
+  }, [chatData?.turns]);
+
+  const resolvedFileMentions = useMemo(
+    () => uploads.map((f) => f.filename),
+    [uploads],
+  );
+
+  const resolvePromptMentions = (rawPrompt) => {
+    let nextPrompt = rawPrompt;
+    const pickedStorageIds = [];
+    const pickedFilenames = [];
+    const mentionMatches = rawPrompt.matchAll(/(^|\s)@(?:"([^"]+)"|([^\s@"]+))/g);
+
+    for (const match of mentionMatches) {
+      const rawToken = match[2] ?? match[3];
+      const token = rawToken?.toLowerCase();
+      if (!token) continue;
+      const matched = uploads.find(
+        (f) =>
+          f.filename.toLowerCase() === token ||
+          f.filename.toLowerCase().startsWith(token),
+      );
+      if (!matched) continue;
+
+      const mentionLiteral = match[2] ? `@"${match[2]}"` : `@${match[3]}`;
+      nextPrompt = nextPrompt.replace(mentionLiteral, matched.filename);
+      if (matched.storageId && !pickedStorageIds.includes(matched.storageId)) {
+        pickedStorageIds.push(matched.storageId);
+        pickedFilenames.push(matched.filename);
+      }
+    }
+
+    return { nextPrompt, pickedStorageIds, pickedFilenames };
+  };
+
+  const handleSubmit = async (prompt) => {
     if (!isAuthenticated) {
       toast.error("Sign in to continue");
       return;
     }
     setIsBusy(true);
     try {
-      const inputStorageIds = [];
-      const inputFilenames = [];
-      for (const file of files) {
-        const uploadUrl = await generateUploadUrl();
-        const res = await fetch(uploadUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": file.type || "application/octet-stream",
-          },
-          body: file,
-        });
-        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-        const { storageId } = await res.json();
-        inputStorageIds.push(storageId);
-        inputFilenames.push(file.name);
-      }
+      const { nextPrompt, pickedStorageIds, pickedFilenames } =
+        resolvePromptMentions(prompt);
 
       const result = await submit({
-        prompt,
-        inputStorageIds,
-        inputFilenames,
+        prompt: nextPrompt,
+        inputStorageIds: pickedStorageIds,
+        inputFilenames: pickedFilenames,
         chatId: chatId ?? undefined,
       });
 
@@ -249,7 +404,7 @@ export function ChatShell({ chatId = null }) {
                   <div
                     className={cn(
                       "group flex items-stretch rounded-md transition-colors",
-                      active ? "bg-muted" : "hover:bg-muted/60"
+                      active ? "bg-muted" : "hover:bg-muted/60",
                     )}
                   >
                     <Link
@@ -263,7 +418,7 @@ export function ChatShell({ chatId = null }) {
                       <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground">
                         {new Date(c.lastActivity).toLocaleDateString(
                           undefined,
-                          { month: "short", day: "numeric" }
+                          { month: "short", day: "numeric" },
                         )}
                       </p>
                     </Link>
@@ -286,14 +441,212 @@ export function ChatShell({ chatId = null }) {
     </>
   );
 
+  const appSidebarExtra = (
+    <div className="h-full overflow-y-auto overscroll-contain px-1">
+      <div className="flex items-center justify-between px-1 py-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">History</span>
+      </div>
+      <div className="space-y-0.5">
+        {chats === undefined ? (
+          <div className="space-y-2 px-1 pt-1">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : chats.length === 0 ? (
+          <div className="px-3 py-10 text-center text-[12.5px] text-muted-foreground">
+            No conversations yet
+          </div>
+        ) : (
+          <ul className="space-y-0.5" aria-label="Chat history">
+            {chats.map((c) => {
+              const active = c._id === chatId;
+              return (
+                <li key={c._id}>
+                  <div
+                    className={cn(
+                      "group flex items-stretch rounded-md transition-colors",
+                      active ? "bg-muted" : "hover:bg-muted/60",
+                    )}
+                  >
+                    <Link
+                      href={`/dashboard/${c._id}`}
+                      className="min-w-0 flex-1 px-2.5 py-2.5 text-left outline-none focus:outline-none focus-visible:outline-none"
+                    >
+                      <p className="line-clamp-1 text-[13px] font-medium text-foreground">
+                        {c.title || "Untitled chat"}
+                      </p>
+                      <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground">
+                        {new Date(c.lastActivity).toLocaleDateString(
+                          undefined,
+                          {
+                            month: "short",
+                            day: "numeric",
+                          },
+                        )}
+                      </p>
+                    </Link>
+                    <button
+                      onClick={(e) => handleDeleteChat(c._id, e)}
+                      className="mr-1 my-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
+                      aria-label="Delete chat"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+
+  const appSidebarUsage = <UsageMeter />;
+
   const inExistingChat = Boolean(chatId);
 
+  const uploadsPanel = (
+    <>
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3 sm:px-4">
+        <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+          <Upload className="size-3.5" />
+          Uploads
+        </span>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => setUploadsOpen(false)}
+          aria-label="Close uploads"
+          className="lg:hidden"
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+      <div className="px-2 pt-2">
+        <Button
+          size="sm"
+          className="w-full"
+          aria-label="Upload files"
+          onClick={() => uploadsInputRef.current?.click()}
+        >
+          <Plus className="size-3.5" />
+          Upload files
+        </Button>
+      </div>
+      <div
+        className={cn(
+          "m-2 rounded-lg border border-dashed border-border p-3 text-center text-[11.5px] text-muted-foreground transition-colors",
+          uploadsDragActive && "border-foreground/40 bg-muted/40",
+        )}
+        onDragOver={(e) => {
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          setUploadsDragActive(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.relatedTarget === null) setUploadsDragActive(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setUploadsDragActive(false);
+          handleUploadFiles(e.dataTransfer.files);
+        }}
+      >
+        Drop files here to upload
+      </div>
+
+      <input
+        ref={uploadsInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          handleUploadFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+
+      <div className="flex-1 overflow-y-auto px-2 pb-2">
+        {uploading.map((u) => (
+          <div
+            key={u.localId}
+            className="mb-2 rounded-md border border-border p-2"
+          >
+            <p className="truncate text-[12px] font-medium" title={u.filename}>
+              {u.filename}
+            </p>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-foreground/45 transition-all duration-150"
+                style={{ width: `${u.progress || 2}%` }}
+              />
+            </div>
+          </div>
+        ))}
+
+        {uploads.length === 0 && uploading.length === 0 ? (
+          <div className="px-2 py-6 text-center text-[12px] text-muted-foreground">
+            No uploaded or generated files yet
+          </div>
+        ) : (
+          <ul className="space-y-1" aria-label="Uploaded and generated files">
+            {uploads.map((f) => (
+              <li
+                key={f.storageId || f.filename}
+                className="group rounded-md border border-border bg-card px-2.5 py-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className="truncate text-mono text-[12px]"
+                    title={f.filename}
+                  >
+                    {f.filename}
+                  </span>
+                  <div className="shrink-0">
+                    <span className="inline-flex rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground group-hover:hidden">
+                      {fileTypeLabel(f.filename)}
+                    </span>
+                    {f.url ? (
+                      <a
+                        href={f.url}
+                        download={f.filename}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hidden rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground group-hover:inline-flex"
+                        aria-label={`Download ${f.filename}`}
+                        title="Download"
+                      >
+                        <Download className="size-3.5" />
+                      </a>
+                    ) : (
+                      <span
+                        className="hidden rounded p-1 text-muted-foreground/60 group-hover:inline-flex"
+                        title="Download unavailable"
+                      >
+                        <Download className="size-3.5" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+
   return (
-    <AppShell mode="app">
-      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 lg:grid-cols-[280px_1fr]">
-        {/* Desktop history sidebar */}
+    <AppShell
+      mode="app"
+      appSidebarNavExtra={appSidebarExtra}
+      appSidebarFooterExtra={appSidebarUsage}
+    >
+      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 lg:grid-cols-[300px_1fr]">
         <aside className="hidden h-full min-h-0 flex-col border-r border-border lg:flex">
-          {historyPanel}
+          {uploadsPanel}
         </aside>
 
         {/* Mobile history drawer */}
@@ -327,6 +680,36 @@ export function ChatShell({ chatId = null }) {
           )}
         </AnimatePresence>
 
+        <AnimatePresence>
+          {uploadsOpen && (
+            <>
+              <motion.div
+                key="uploads-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-40 bg-background/70 backdrop-blur-sm lg:hidden"
+                onClick={() => setUploadsOpen(false)}
+              />
+              <motion.aside
+                key="uploads-drawer"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] flex-col border-r border-border bg-background shadow-2xl lg:hidden"
+                style={{
+                  paddingTop: "env(safe-area-inset-top)",
+                  paddingBottom: "env(safe-area-inset-bottom)",
+                }}
+              >
+                {uploadsPanel}
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
         <div className="flex h-full min-h-0 flex-col">
           {/* Header — glassy, sticky, with safe area */}
           <header
@@ -337,7 +720,7 @@ export function ChatShell({ chatId = null }) {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => setHistoryOpen(true)}
+                onClick={openHistory}
                 aria-label="Open history"
                 className="lg:hidden"
               >
@@ -351,13 +734,11 @@ export function ChatShell({ chatId = null }) {
               <Button
                 size="icon"
                 variant="ghost"
-                asChild
-                aria-label="New chat"
+                onClick={openUploads}
+                aria-label="Open uploads"
                 className="lg:hidden"
               >
-                <Link href="/dashboard">
-                  <Plus className="size-[18px]" />
-                </Link>
+                <Upload className="size-[18px]" />
               </Button>
               {chat && (
                 <Button
@@ -379,17 +760,28 @@ export function ChatShell({ chatId = null }) {
                     className="ml-0.5 inline-flex size-9 items-center justify-center rounded-md transition-colors hover:bg-muted lg:hidden"
                   >
                     <Avatar className="size-7">
-                      <AvatarImage src={user?.picture} alt={user?.name || "Account"} />
-                      <AvatarFallback className="text-[10.5px]">{initials}</AvatarFallback>
+                      <AvatarImage
+                        src={user?.picture}
+                        alt={user?.name || "Account"}
+                      />
+                      <AvatarFallback className="text-[10.5px]">
+                        {initials}
+                      </AvatarFallback>
                     </Avatar>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8} className="w-56">
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-56"
+                >
                   {user && (
                     <>
                       <DropdownMenuLabel className="normal-case tracking-normal text-foreground">
                         <div className="flex flex-col">
-                          <span className="truncate text-[13px] font-medium">{user.name}</span>
+                          <span className="truncate text-[13px] font-medium">
+                            {user.name}
+                          </span>
                           <span className="truncate text-[11.5px] font-normal text-muted-foreground">
                             {user.email}
                           </span>
@@ -398,15 +790,24 @@ export function ChatShell({ chatId = null }) {
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  <DropdownMenuItem onClick={() => setTheme(isDark ? "light" : "dark")}>
-                    {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+                  <DropdownMenuItem
+                    onClick={() => setTheme(isDark ? "light" : "dark")}
+                  >
+                    {isDark ? (
+                      <Sun className="size-3.5" />
+                    ) : (
+                      <Moon className="size-3.5" />
+                    )}
                     {isDark ? "Light mode" : "Dark mode"}
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled>
                     <Settings className="size-3.5" /> Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                  <DropdownMenuItem
+                    onClick={logout}
+                    className="text-destructive focus:text-destructive"
+                  >
                     <LogOut className="size-3.5" /> Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -451,14 +852,16 @@ export function ChatShell({ chatId = null }) {
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 pt-2.5 sm:px-6 sm:pb-5 sm:pt-4">
               <Composer
                 onSubmit={handleSubmit}
+                onOpenUploads={openUploads}
                 isBusy={isBusy}
                 autoFocus
-                allowEmptyFiles
                 initialPrompt={initialPrompt}
+                fileMentions={resolvedFileMentions}
+                showMobileAttachButton
                 placeholder={
                   inExistingChat && turns.length > 0
                     ? "Follow up — ask anything…"
-                    : "Ask anything, or drop files…"
+                    : "Ask anything, reference files with @filename…"
                 }
               />
               <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">

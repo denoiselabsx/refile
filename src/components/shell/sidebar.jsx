@@ -34,7 +34,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 import { APP_NAV, BRAND, isActive } from "@/lib/nav";
 
-export function AppSidebar() {
+export function AppSidebar({ navExtraContent = null, footerExtraContent = null }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -54,7 +54,7 @@ export function AppSidebar() {
 
   return (
     <TooltipProvider>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-14 flex-col border-r border-border bg-background/80 backdrop-blur-md lg:flex">
+      <aside className="group fixed inset-y-0 left-0 z-30 hidden w-14 flex-col border-r border-border bg-background/80 backdrop-blur-md transition-[width] duration-200 hover:w-80 lg:flex">
         <div className="flex h-14 items-center justify-center">
           <Link
             href="/"
@@ -65,15 +65,18 @@ export function AppSidebar() {
           </Link>
         </div>
 
-        <nav className="flex flex-1 flex-col items-center gap-1 px-2 pt-2">
+        <nav className="flex flex-1 flex-col items-center gap-1 px-2 pt-2 group-hover:items-stretch">
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
                 href="/dashboard"
-                className="mb-2 flex size-9 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted"
+                className="mb-2 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted group-hover:w-full group-hover:justify-start group-hover:px-2"
                 aria-label="New chat"
               >
                 <Plus className="size-4" />
+                <span className="ml-2 hidden text-[12.5px] font-medium group-hover:inline">
+                  New chat
+                </span>
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">New chat</TooltipContent>
@@ -88,7 +91,7 @@ export function AppSidebar() {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex size-9 items-center justify-center rounded-md transition-colors",
+                      "flex h-9 w-9 items-center justify-center rounded-md transition-colors group-hover:w-full group-hover:justify-start group-hover:px-2",
                       active
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -97,15 +100,30 @@ export function AppSidebar() {
                     aria-current={active ? "page" : undefined}
                   >
                     <Icon className="size-4" />
+                    <span className="ml-2 hidden text-[12.5px] font-medium group-hover:inline">
+                      {item.label}
+                    </span>
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">{item.label}</TooltipContent>
               </Tooltip>
             );
           })}
+
+          {navExtraContent && (
+            <div className="mt-2 hidden w-full min-h-0 flex-1 overflow-hidden border-t border-border/70 pt-2 group-hover:block">
+              {navExtraContent}
+            </div>
+          )}
         </nav>
 
         <div className="flex flex-col items-center gap-1 px-2 pb-3">
+          {footerExtraContent && (
+            <div className="mb-2 hidden w-full border-t border-border/70 pt-2 group-hover:block">
+              {footerExtraContent}
+            </div>
+          )}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <button
