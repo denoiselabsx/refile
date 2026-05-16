@@ -1,12 +1,16 @@
-import Link from "next/link";
-import { Check, ArrowRight } from "lucide-react";
+import { headers } from "next/headers";
+import { Check } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 
 import { Spotlight } from "@/components/spotlight";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PricingCta } from "@/components/pricing-cta";
 import { absoluteUrl } from "@/lib/site";
-import { PLANS, PLAN_IDS } from "../../../lib/plans.js";
+import { PLAN_IDS, plansForRegion } from "../../../lib/plans.js";
+import { regionFromHeaders } from "../../../lib/region.js";
+
+// Reads the Vercel geo header → must render per-request, not statically.
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Pricing",
@@ -28,52 +32,59 @@ function fmtSize(bytes) {
 }
 
 /**
- * Tiers are DERIVED from lib/plans.js — the same config the backend enforces.
- * Every bullet here corresponds to a real, enforced limit. No aspirational
- * copy (no workflows, no SSO, no "priority processing") until those exist.
+ * Tiers are DERIVED from lib/plans.js for the request's region — the same
+ * config the backend enforces. Every bullet corresponds to a real, enforced
+ * limit. India sees lower prices for identical quotas; quota copy is
+ * therefore region-independent and only the price differs.
  */
-const TIERS = PLAN_IDS.map((id) => {
-  const p = PLANS[id];
-  const features = [
-    p.overagePerConversion == null
-      ? `${p.includedConversions} conversions / month (hard limit)`
-      : `${p.includedConversions} conversions / month included`,
-    p.overagePerConversion != null
-      ? `Then $${p.overagePerConversion.toFixed(2)} per extra conversion`
-      : "No overage — upgrade for more",
-    `Files up to ${fmtSize(p.maxFileBytes)}`,
-    p.maxFilesPerConversion === 1
-      ? "One file per conversion"
-      : `Up to ${p.maxFilesPerConversion} files per conversion (batch)`,
-    p.maxPresets == null
-      ? "Unlimited saved presets"
-      : `Save up to ${p.maxPresets} preset${p.maxPresets === 1 ? "" : "s"}`,
-    "Voice input in 11 languages",
-    p.historyLimit == null
-      ? "Full conversion history"
-      : `Last ${p.historyLimit} conversions in history`,
-    `${p.support} support`,
-  ];
-  return {
-    id,
-    name: p.name,
-    price: `$${p.priceMonthly}`,
-    cadence: p.cadence,
-    description: p.tagline,
-    features,
-    featured: id === "pro",
-    cta:
-      id === "free"
-        ? { label: "Get started", href: "/login/google", variant: "outline" }
-        : {
-            label: `Choose ${p.name}`,
-            href: "/login/google",
-            variant: id === "pro" ? "default" : "outline",
-          },
-  };
-});
+function buildTiers(region) {
+  const plans = plansForRegion(region);
+  return PLAN_IDS.map((id) => {
+    const p = plans[id];
+    const features = [
+      p.overagePerConversion == null
+        ? `${p.includedConversions} conversions / month (hard limit)`
+        : `${p.includedConversions} conversions / month included`,
+      p.overagePerConversion != null
+        ? `Then $${p.overagePerConversion.toFixed(2)} per extra conversion`
+        : "No overage — upgrade for more",
+      `Files up to ${fmtSize(p.maxFileBytes)}`,
+      p.maxFilesPerConversion === 1
+        ? "One file per conversion"
+        : `Up to ${p.maxFilesPerConversion} files per conversion (batch)`,
+      p.maxPresets == null
+        ? "Unlimited saved presets"
+        : `Save up to ${p.maxPresets} preset${p.maxPresets === 1 ? "" : "s"}`,
+      "Voice input in 11 languages",
+      p.historyLimit == null
+        ? "Full conversion history"
+        : `Last ${p.historyLimit} conversions in history`,
+      `${p.support} support`,
+    ];
+    return {
+      id,
+      name: p.name,
+      price: `$${p.priceMonthly}`,
+      cadence: p.cadence,
+      description: p.tagline,
+      features,
+      featured: id === "pro",
+      cta:
+        id === "free"
+          ? { label: "Get started", variant: "outline" }
+          : {
+              label: `Choose ${p.name}`,
+              variant: id === "pro" ? "default" : "outline",
+            },
+    };
+  });
+}
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const region = regionFromHeaders(await headers());
+  const TIERS = buildTiers(region);
+  const isIndia = region === "IN";
+
   return (
     <AppShell mode="marketing">
       <div className="relative overflow-hidden">
@@ -94,6 +105,13 @@ export default function PricingPage() {
               fails is never counted and never charged. Cancel any time — your
               presets and history come with you.
             </p>
+            {isIndia && (
+              <p className="mx-auto mt-4 max-w-xl text-[13px] text-muted-foreground">
+                🇮🇳 Showing India pricing — same limits, lower price. Prices
+                are in USD; an Indian billing address is required at checkout
+                to keep this rate.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -143,17 +161,13 @@ export default function PricingPage() {
               </ul>
 
               <div className="mt-7 flex-1" />
-              <Button
+              <PricingCta
+                planId={tier.id}
+                region={region}
+                label={tier.cta.label}
                 variant={tier.cta.variant}
-                asChild
-                className={`w-full ${tier.featured ? "cta-shimmer" : ""}`}
-                size="lg"
-              >
-                <Link href={tier.cta.href}>
-                  {tier.cta.label}
-                  <ArrowRight className="size-3.5" />
-                </Link>
-              </Button>
+                featured={tier.featured}
+              />
             </Spotlight>
           ))}
         </div>

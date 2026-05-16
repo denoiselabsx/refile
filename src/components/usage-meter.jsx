@@ -38,7 +38,7 @@ export function UsageMeter() {
           href="/pricing"
           className="text-[11px] font-medium text-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
         >
-          {u.planId === "power" ? "Manage" : "Upgrade"}
+          {u.planId === "free" ? "Upgrade" : "Manage"}
         </Link>
       </div>
 

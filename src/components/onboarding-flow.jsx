@@ -13,9 +13,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { PLANS } from "../../lib/plans.js";
+import { getPlan } from "../../lib/plans.js";
 
-const free = PLANS.free;
+// Free-plan limits are region-independent (quotas are identical across
+// regions; only price differs, which onboarding doesn't show).
+const free = getPlan("free");
 
 const STEPS = [
   {

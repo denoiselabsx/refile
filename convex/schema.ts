@@ -23,11 +23,29 @@ export default defineSchema({
       v.literal("pro"),
       v.literal("power")
     ),
-    // Set when a plan is changed manually (no Stripe yet). Audit only.
+    // Set when the plan last changed (manual or via a Polar webhook). Audit only.
     updatedAt: v.number(),
+    // Pricing region this user is billed under: "global" or "IN". Set by the
+    // subscription webhook (derived from which regional Polar product they
+    // bought, then verified against their Polar billing country). Absent =
+    // "global". Quotas are identical across regions — this only affects the
+    // displayed/charged price.
+    region: v.optional(v.string()),
+    // True if the user bought an India-priced product from a non-India
+    // billing country (IP-spoof case). Their region is forced to "global"
+    // and this flag is set for review. Audit/abuse surface only.
+    regionMismatch: v.optional(v.boolean()),
     // Timestamp the user finished the post-signup onboarding flow. Absent =
     // not onboarded yet → the app shows the onboarding modal once.
     onboardedAt: v.optional(v.number()),
+    // Polar billing linkage. Set by the subscription webhook. customerId lets
+    // the Customer Portal route resolve the right Polar customer;
+    // subscriptionId + status/periodEnd let us reason about lifecycle without
+    // re-querying Polar. Absent = no paid subscription (Free).
+    polarCustomerId: v.optional(v.string()),
+    polarSubscriptionId: v.optional(v.string()),
+    polarSubscriptionStatus: v.optional(v.string()),
+    polarCurrentPeriodEnd: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   // Per-user, per-month metered usage. One row per (user, month) where month
@@ -130,6 +148,10 @@ export default defineSchema({
     // Set by the cleanup cron once the blobs are deleted from storage.
     // The history row stays; only file URLs become unavailable.
     filesExpired: v.optional(v.boolean()),
+    // Idempotency guard for Polar usage billing: set true once this
+    // conversion's usage event has been ingested to Polar. runJob skips
+    // ingestion if already true, so a runJob retry can't double-bill.
+    billedToPolar: v.optional(v.boolean()),
   })
     .index("by_user_recent", ["userId"])
     .index("by_chat", ["chatId", "turnIndex"])

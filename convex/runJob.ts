@@ -6,7 +6,11 @@ import { internal } from "./_generated/api";
 import { generateObject } from "ai";
 import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
+import { Polar } from "@polar-sh/sdk";
 import { validateCommand } from "./commandValidator";
+import { correctCommand } from "./commandCorrector";
+import { CONVERSION_EVENT_NAME } from "../lib/polar.js";
+import type { Id } from "./_generated/dataModel";
 
 /* ──────────────────────────────────────────────────────────────── *
  *  Structured AI response schema
@@ -291,6 +295,11 @@ WebM → MP4 conversion (the common screencast case — VP8/VP9 video with
 no audio track, often odd dimensions):
   ffmpeg -i 'in.webm' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 23 -preset medium -c:a copy 'out.mp4'
 
+Change/adjust volume — the volume filter takes a LINEAR MULTIPLIER or a
+dB value, NEVER a percentage. "50%" → 0.5, "half" → 0.5, "double" → 2,
+"+150%" → 1.5, "-6 dB" → -6dB. Writing volume=50% is a HARD ERROR.
+  ffmpeg -i 'in.mp3' -af "volume=0.5" 'out.mp3'
+
 Extract audio as 192 kbps MP3:
   ffmpeg -i 'in.mp4' -vn -b:a 192k 'out.mp3'
 
@@ -519,6 +528,61 @@ Validate mentally before answering: does every flag I'm using actually
 exist in the tool I'm calling? If unsure, switch to chat and ask.`;
 
 /* ──────────────────────────────────────────────────────────────── *
+ *  Polar usage billing
+ * ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Ingest one "conversion" usage event to Polar's meter, exactly once per
+ * prompt. Idempotency has three layers:
+ *
+ *   1. Convex guard — billingTargetForPrompt reports if this prompt was
+ *      already billed; we skip if so. markPromptBilled flips the flag
+ *      AFTER a successful ingest, so a runJob retry that re-reaches this
+ *      point is a no-op.
+ *   2. Polar event `externalId` = promptId — a documented dedup/attribution
+ *      key, so even a duplicate request to Polar is de-duplicated there.
+ *   3. Called only on a succeeded conversion (caller-enforced).
+ *
+ * No POLAR_ACCESS_TOKEN configured → silently no-op (billing not set up
+ * yet; usage is still recorded locally in userUsage for reconciliation).
+ */
+async function ingestConversionToPolar(
+  ctx: { runQuery: any; runMutation: any },
+  promptId: Id<"prompts">,
+  userId: Id<"users">
+): Promise<void> {
+  const accessToken = process.env.POLAR_ACCESS_TOKEN;
+  if (!accessToken) return; // billing not configured — local metering only
+
+  const target = await ctx.runQuery(internal.plans.billingTargetForPrompt, {
+    promptId,
+  });
+  if (!target || target.alreadyBilled) return; // idempotent skip
+
+  const polar = new Polar({
+    accessToken,
+    server:
+      process.env.POLAR_SERVER === "production" ? "production" : "sandbox",
+  });
+
+  await polar.events.ingest({
+    events: [
+      {
+        name: CONVERSION_EVENT_NAME,
+        // Convex user id == the Polar customer external_id set at checkout.
+        externalCustomerId: userId,
+        // Per-event dedup/attribution key (Polar docs: `external_id`).
+        externalId: promptId,
+        metadata: { conversions: 1, promptId },
+      },
+    ],
+  });
+
+  // Flip the flag only after Polar accepted the event.
+  await ctx.runMutation(internal.plans.markPromptBilled, { promptId });
+}
+
+/* ──────────────────────────────────────────────────────────────── *
  *  Main action
  * ──────────────────────────────────────────────────────────────── */
 
@@ -674,12 +738,30 @@ export const runJob = internalAction({
       return;
     }
 
+    // Semantic correction: the model regularly emits commands that are safe
+    // and well-formed bash but semantically wrong for the target tool — e.g.
+    // `volume=50%` (ffmpeg wants a 0.5 multiplier). These mistakes are
+    // deterministic, so we fix them here instead of failing the job and
+    // making the user rephrase. The corrected command is what we store AND
+    // what we run, so the UI shows exactly what executed.
+    const correction = correctCommand(ai.command);
+    if (correction.command !== ai.command) {
+      console.log(
+        `[runJob] auto-corrected command for prompt ${promptId}: ` +
+          correction.notes.join(" | ")
+      );
+      ai.command = correction.command;
+    }
+    const correctionNote = correction.notes.length
+      ? `\n\n_Auto-corrected: ${correction.notes.join(" ")}_`
+      : "";
+
     await ctx.runMutation(internal.prompts.patchAiResponse, {
       promptId,
       aiKind: "command",
       aiCommand: ai.command,
       aiCommandTemplate: ai.command_template,
-      aiDescription: ai.description,
+      aiDescription: (ai.description ?? "") + correctionNote,
       aiTool: ai.tool,
       aiInputFiles: ai.input_files,
       aiOutputFiles: ai.output_files,
@@ -801,6 +883,22 @@ export const runJob = internalAction({
           modalMs,
           bytesProcessed,
         });
+
+        // Bill the conversion to Polar's usage meter. Idempotent: the
+        // billingTarget check + markPromptBilled flag mean a runJob retry
+        // can't double-ingest, and Polar's own event `externalId` (set to
+        // the promptId) is a second dedup layer. Best-effort — a Polar
+        // outage must never fail the user's conversion, so this is wrapped
+        // and only logs on error (usage can be reconciled later).
+        try {
+          await ingestConversionToPolar(ctx, promptId, promptDoc.userId);
+        } catch (err) {
+          console.error(
+            `[runJob] Polar usage ingestion failed for ${promptId}: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
       }
     } catch (err) {
       await ctx.runMutation(internal.prompts.patchExecution, {
