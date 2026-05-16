@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { AuthProvider } from "@/contexts/auth-context";
+import { UpgradeProvider } from "@/contexts/upgrade-context";
 import { Toaster } from "@/components/ui/toaster";
 import { CommandPalette } from "@/components/command-palette";
 import { Analytics } from "@vercel/analytics/next";
@@ -161,10 +162,12 @@ export default function RootLayout({ children }) {
         >
           <ConvexClientProvider>
             <AuthProvider>
-              {children}
-              <CommandPalette />
-              <Toaster />
-              <Analytics />
+              <UpgradeProvider>
+                {children}
+                <CommandPalette />
+                <Toaster />
+                <Analytics />
+              </UpgradeProvider>
             </AuthProvider>
           </ConvexClientProvider>
         </ThemeProvider>

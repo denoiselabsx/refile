@@ -14,11 +14,13 @@ import {
   toFormData,
 } from "@/components/preset-form";
 import { useAuth } from "@/contexts/auth-context";
+import { useUpgrade } from "@/contexts/upgrade-context";
 import { api } from "../../../../convex/_generated/api";
 
 export default function CreatePresetPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
+  const { triggerUpgrade } = useUpgrade();
   const createPreset = useMutation(api.presets.create);
   const [initial, setInitial] = useState(EMPTY_PRESET);
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +71,9 @@ export default function CreatePresetPage() {
       toast.success("Preset published");
       router.push(`/presets/${presetId}`);
     } catch (err) {
-      toast.error("Couldn't create preset", { description: err?.message });
+      if (!triggerUpgrade(err)) {
+        toast.error("Couldn't create preset", { description: err?.message });
+      }
     } finally {
       setSubmitting(false);
     }

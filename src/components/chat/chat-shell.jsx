@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
+import { useUpgrade } from "@/contexts/upgrade-context";
 import { UsageMeter } from "@/components/usage-meter";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ function fileTypeLabel(filename) {
 export function ChatShell({ chatId = null }) {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { triggerUpgrade } = useUpgrade();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [isBusy, setIsBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -301,7 +303,11 @@ export function ChatShell({ chatId = null }) {
         router.push(`/dashboard/${result.chatId}`);
       }
     } catch (err) {
-      toast.error("Couldn't process", { description: err?.message });
+      // If it's a plan-limit wall, show the upgrade modal instead of a
+      // plain error toast. triggerUpgrade returns true when it handled it.
+      if (!triggerUpgrade(err)) {
+        toast.error("Couldn't process", { description: err?.message });
+      }
     } finally {
       setIsBusy(false);
     }

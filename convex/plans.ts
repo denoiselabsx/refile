@@ -94,8 +94,9 @@ export async function assertWithinQuota(
   // File count per conversion.
   if (fileCount > plan.maxFilesPerConversion) {
     throw new Error(
-      `Your ${plan.name} plan allows ${plan.maxFilesPerConversion} file(s) ` +
-        `per conversion. This request has ${fileCount}. Upgrade for batch conversions.`
+      `[[UPGRADE:batch:${planId}]] Your ${plan.name} plan allows ` +
+        `${plan.maxFilesPerConversion} file(s) per conversion. This request ` +
+        `has ${fileCount}. Upgrade for bigger batch conversions.`
     );
   }
 
@@ -108,7 +109,8 @@ export async function assertWithinQuota(
         ? `${Math.round(plan.maxFileBytes / (1024 * 1024 * 1024))} GB`
         : `${Math.round(plan.maxFileBytes / (1024 * 1024))} MB`;
     throw new Error(
-      `Your ${plan.name} plan caps files at ${cap}. Upgrade for larger files.`
+      `[[UPGRADE:filesize:${planId}]] Your ${plan.name} plan caps files at ` +
+        `${cap}. Upgrade to convert larger files.`
     );
   }
 
@@ -117,8 +119,9 @@ export async function assertWithinQuota(
   if (usage.conversions >= plan.includedConversions) {
     if (plan.overagePerConversion == null) {
       throw new Error(
-        `You've used all ${plan.includedConversions} free conversions this ` +
-          `month. Upgrade to Student, Pro, or Power for more.`
+        `[[UPGRADE:conversions:${planId}]] You've used all ` +
+          `${plan.includedConversions} free conversions this month. ` +
+          `Upgrade for more — and pay-as-you-go after that.`
       );
     }
     // Paid plan over quota → allowed, will accrue overage. No throw.
@@ -140,8 +143,8 @@ export async function assertCanCreatePreset(
     .collect();
   if (mine.length >= plan.maxPresets) {
     throw new Error(
-      `Your ${plan.name} plan allows ${plan.maxPresets} saved presets. ` +
-        `Delete one or upgrade for more.`
+      `[[UPGRADE:presets:${planId}]] Your ${plan.name} plan allows ` +
+        `${plan.maxPresets} saved presets. Upgrade for unlimited presets.`
     );
   }
 }
