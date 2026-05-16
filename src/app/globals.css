@@ -260,6 +260,14 @@ body {
   border-radius: var(--radius-sm);
 }
 
+/* The composer textarea is the obvious active element and sits in its own
+   card — the global focus-visible outline just draws an ugly box around it.
+   Opt it out explicitly (keeps a11y outline everywhere else). */
+.composer-input:focus,
+.composer-input:focus-visible {
+  outline: none;
+}
+
 /* ---------------------------------------------------------------- *
  *  Utility primitives
  * ---------------------------------------------------------------- */
