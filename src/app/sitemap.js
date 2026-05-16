@@ -2,6 +2,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
 import { SITE_URL } from "@/lib/site";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
+import { DOCS_PAGES, docsHref } from "../../lib/docs-nav.js";
 
 const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -26,6 +27,13 @@ export default async function sitemap() {
       : [{ url: `${SITE_URL}/presets`, lastModified: now, changeFrequency: "daily", priority: 0.9 }]),
     { url: `${SITE_URL}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${SITE_URL}/docs`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    // Doc sub-pages, generated from the docs registry so it stays in sync.
+    ...DOCS_PAGES.filter((p) => p.slug !== "").map((p) => ({
+      url: `${SITE_URL}${docsHref(p.slug)}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    })),
     { url: `${SITE_URL}/changelog`, lastModified: now, changeFrequency: "weekly", priority: 0.5 },
     { url: `${SITE_URL}/community`, lastModified: now, changeFrequency: "weekly", priority: 0.5 },
     { url: `${SITE_URL}/status`, lastModified: now, changeFrequency: "daily", priority: 0.4 },
