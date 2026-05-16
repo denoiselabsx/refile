@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -26,7 +24,6 @@ import { Spotlight } from "@/components/spotlight";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
-import { useAuth } from "@/contexts/auth-context";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 const FEATURES = [
@@ -165,14 +162,11 @@ const SHOWCASE = [
 ];
 
 export default function Home() {
-  const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace("/dashboard");
-    }
-  }, [isAuthenticated, isLoading, router]);
+  // Note: deliberately NO auto-redirect for authenticated users. The landing
+  // page (and all marketing pages) must stay viewable while signed in;
+  // logged-in users enter the app via the "Dashboard" button in the nav
+  // (top-bar already swaps Sign in → Dashboard when authed). A forced
+  // / → /dashboard redirect here trapped users who wanted /, /pricing, etc.
 
   return (
     <AppShell mode="marketing">

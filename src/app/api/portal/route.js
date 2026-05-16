@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { CustomerPortal } from "@polar-sh/nextjs";
 import { polarServer } from "../../../../lib/polar.js";
+import { publicOrigin } from "../../../../lib/request-origin.js";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,8 @@ export const runtime = "nodejs";
  * and scoped to that one customer by Polar.
  */
 export async function GET(req) {
-  const { searchParams, origin } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
+  const origin = publicOrigin(req);
   const customerId = searchParams.get("customerId");
 
   if (!customerId) {

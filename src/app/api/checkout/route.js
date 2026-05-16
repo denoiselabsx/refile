@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Checkout } from "@polar-sh/nextjs";
 import { productIdForPlan, polarServer } from "../../../../lib/polar.js";
 import { regionFromHeaders } from "../../../../lib/region.js";
+import { publicOrigin } from "../../../../lib/request-origin.js";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,10 @@ export const runtime = "nodejs";
  *     country must agree for the India price to stick.
  */
 export async function GET(req) {
-  const { searchParams, origin } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
+  // Public origin (ngrok/proxy-aware) — NOT new URL(req.url).origin, which
+  // is localhost behind a tunnel and would bounce users back to localhost.
+  const origin = publicOrigin(req);
   const plan = searchParams.get("plan");
   const userId = searchParams.get("userId");
   const email = searchParams.get("email") || undefined;
