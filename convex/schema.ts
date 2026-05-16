@@ -12,6 +12,39 @@ export default defineSchema({
     role: v.union(v.literal("admin"), v.literal("user")),
   }).index("by_user", ["userId"]),
 
+  // Billing plan per user. Separate table (same reasoning as userRoles): the
+  // users table is managed by Convex Auth, so we keep mutable app state out of
+  // it. Absence of a row means the Free plan (see lib/plans.js DEFAULT_PLAN).
+  userPlans: defineTable({
+    userId: v.id("users"),
+    plan: v.union(
+      v.literal("free"),
+      v.literal("student"),
+      v.literal("pro"),
+      v.literal("power")
+    ),
+    // Set when a plan is changed manually (no Stripe yet). Audit only.
+    updatedAt: v.number(),
+    // Timestamp the user finished the post-signup onboarding flow. Absent =
+    // not onboarded yet → the app shows the onboarding modal once.
+    onboardedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+
+  // Per-user, per-month metered usage. One row per (user, month) where month
+  // is "YYYY-MM" in UTC. Written by the runJob metering step ONLY on a
+  // successful conversion, so failures are never counted or charged. The
+  // Groq/Modal columns track real provider cost so the dashboard can show an
+  // accurate breakdown and we can add a markup at monthly payout.
+  userUsage: defineTable({
+    userId: v.id("users"),
+    month: v.string(), // "2026-05"
+    conversions: v.number(),
+    groqInputTokens: v.number(),
+    groqOutputTokens: v.number(),
+    modalMs: v.number(), // wall-clock proxy for Modal compute time
+    bytesProcessed: v.number(),
+  }).index("by_user_month", ["userId", "month"]),
+
   // Reusable shell-command recipes
   presets: defineTable({
     userId: v.id("users"),

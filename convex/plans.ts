@@ -1,0 +1,291 @@
+import { v } from "convex/values";
+import { query, mutation, internalMutation } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
+import {
+  PLANS,
+  DEFAULT_PLAN,
+  getPlan,
+  groqCost,
+  modalCost,
+  computeOverage,
+} from "../lib/plans.js";
+
+/** Current month bucket key, UTC, e.g. "2026-05". Must match metering. */
+export function monthKey(date = new Date()): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+/** Resolve a user's plan id; absence of a row = Free. */
+export async function planIdForUser(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">
+): Promise<string> {
+  const row = await ctx.db
+    .query("userPlans")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  return row?.plan ?? DEFAULT_PLAN;
+}
+
+/** This month's usage row for a user, or a zeroed shape if none yet. */
+export async function usageForUser(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  month = monthKey()
+) {
+  const row = await ctx.db
+    .query("userUsage")
+    .withIndex("by_user_month", (q) =>
+      q.eq("userId", userId).eq("month", month)
+    )
+    .unique();
+  return (
+    row ?? {
+      userId,
+      month,
+      conversions: 0,
+      groqInputTokens: 0,
+      groqOutputTokens: 0,
+      modalMs: 0,
+      bytesProcessed: 0,
+    }
+  );
+}
+
+/**
+ * Quota gate. Throws a user-facing Error if the request would exceed the
+ * user's plan. Called from prompts.submit BEFORE a job is created so we never
+ * count or charge for a rejected request.
+ */
+export async function assertWithinQuota(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  fileCount: number,
+  totalBytes: number
+) {
+  const planId = await planIdForUser(ctx, userId);
+  const plan = getPlan(planId);
+  const usage = await usageForUser(ctx, userId);
+
+  // File count per conversion.
+  if (fileCount > plan.maxFilesPerConversion) {
+    throw new Error(
+      `Your ${plan.name} plan allows ${plan.maxFilesPerConversion} file(s) ` +
+        `per conversion. This request has ${fileCount}. Upgrade for batch conversions.`
+    );
+  }
+
+  // File size cap (largest single file; totalBytes is the sum, but we cap the
+  // per-file max — caller passes the max single-file size as totalBytes when
+  // fileCount === 1; for batches we cap the sum to keep it simple and safe).
+  if (totalBytes > plan.maxFileBytes) {
+    const cap =
+      plan.maxFileBytes >= 1024 * 1024 * 1024
+        ? `${Math.round(plan.maxFileBytes / (1024 * 1024 * 1024))} GB`
+        : `${Math.round(plan.maxFileBytes / (1024 * 1024))} MB`;
+    throw new Error(
+      `Your ${plan.name} plan caps files at ${cap}. Upgrade for larger files.`
+    );
+  }
+
+  // Monthly conversion quota. Hard stop for Free; paid plans flow into
+  // metered overage (allowed here, billed at payout).
+  if (usage.conversions >= plan.includedConversions) {
+    if (plan.overagePerConversion == null) {
+      throw new Error(
+        `You've used all ${plan.includedConversions} free conversions this ` +
+          `month. Upgrade to Student, Pro, or Power for more.`
+      );
+    }
+    // Paid plan over quota → allowed, will accrue overage. No throw.
+  }
+}
+
+/** Enforce the per-plan saved-preset cap. Used by presets.create. */
+export async function assertCanCreatePreset(
+  ctx: MutationCtx,
+  userId: Id<"users">
+) {
+  const planId = await planIdForUser(ctx, userId);
+  const plan = getPlan(planId);
+  if (plan.maxPresets == null) return; // unlimited
+
+  const mine = await ctx.db
+    .query("presets")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  if (mine.length >= plan.maxPresets) {
+    throw new Error(
+      `Your ${plan.name} plan allows ${plan.maxPresets} saved presets. ` +
+        `Delete one or upgrade for more.`
+    );
+  }
+}
+
+/**
+ * Internal metering. Called from runJob ONLY after a conversion completes
+ * successfully. Upserts the (user, month) row, incrementing every counter.
+ */
+export const recordConversion = internalMutation({
+  args: {
+    userId: v.id("users"),
+    groqInputTokens: v.number(),
+    groqOutputTokens: v.number(),
+    modalMs: v.number(),
+    bytesProcessed: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const month = monthKey();
+    const existing = await ctx.db
+      .query("userUsage")
+      .withIndex("by_user_month", (q) =>
+        q.eq("userId", args.userId).eq("month", month)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        conversions: existing.conversions + 1,
+        groqInputTokens: existing.groqInputTokens + args.groqInputTokens,
+        groqOutputTokens: existing.groqOutputTokens + args.groqOutputTokens,
+        modalMs: existing.modalMs + args.modalMs,
+        bytesProcessed: existing.bytesProcessed + args.bytesProcessed,
+      });
+    } else {
+      await ctx.db.insert("userUsage", {
+        userId: args.userId,
+        month,
+        conversions: 1,
+        groqInputTokens: args.groqInputTokens,
+        groqOutputTokens: args.groqOutputTokens,
+        modalMs: args.modalMs,
+        bytesProcessed: args.bytesProcessed,
+      });
+    }
+  },
+});
+
+/**
+ * Public: the signed-in user's plan + this month's usage with a full cost
+ * breakdown for the dashboard meter. Mirrors lib/plans.js math so the UI and
+ * billing never disagree.
+ */
+export const myUsage = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const planId = await planIdForUser(ctx, userId);
+    const plan = getPlan(planId);
+    const usage = await usageForUser(ctx, userId);
+
+    const gCost = groqCost(usage.groqInputTokens, usage.groqOutputTokens);
+    const mCost = modalCost(usage.modalMs);
+    const overage = computeOverage(planId, usage);
+
+    return {
+      planId,
+      planName: plan.name,
+      month: usage.month,
+      includedConversions: plan.includedConversions,
+      conversions: usage.conversions,
+      remaining: Math.max(0, plan.includedConversions - usage.conversions),
+      // Real provider cost breakdown — shown so usage is transparent.
+      groqInputTokens: usage.groqInputTokens,
+      groqOutputTokens: usage.groqOutputTokens,
+      groqCostUsd: gCost,
+      modalMs: usage.modalMs,
+      modalCostUsd: mCost,
+      providerCostUsd: gCost + mCost,
+      bytesProcessed: usage.bytesProcessed,
+      // What they'll owe beyond the base subscription at payout.
+      extraConversions: overage.extraConversions,
+      overageDueUsd: overage.amountDue,
+      basePriceUsd: plan.priceMonthly,
+      projectedBillUsd: plan.priceMonthly + overage.amountDue,
+    };
+  },
+});
+
+/** Public: list available plans for the pricing page (kept server-truthful). */
+export const listPlans = query({
+  args: {},
+  handler: async () => PLANS,
+});
+
+/**
+ * Mark the signed-in user's onboarding as complete. Idempotent — safe to call
+ * again (just refreshes the timestamp). Creates the userPlans row on the Free
+ * plan if the user doesn't have one yet.
+ */
+export const completeOnboarding = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not signed in");
+    const existing = await ctx.db
+      .query("userPlans")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    const now = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, { onboardedAt: now });
+    } else {
+      await ctx.db.insert("userPlans", {
+        userId,
+        plan: DEFAULT_PLAN as "free",
+        updatedAt: now,
+        onboardedAt: now,
+      });
+    }
+    return { ok: true };
+  },
+});
+
+/**
+ * Manual plan assignment (no Stripe yet). Admin-only: checks the caller has
+ * the admin role before changing anyone's plan.
+ */
+export const setPlan = mutation({
+  args: {
+    targetUserId: v.id("users"),
+    plan: v.union(
+      v.literal("free"),
+      v.literal("student"),
+      v.literal("pro"),
+      v.literal("power")
+    ),
+  },
+  handler: async (ctx, { targetUserId, plan }) => {
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId) throw new Error("Not signed in");
+    const role = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user", (q) => q.eq("userId", callerId))
+      .unique();
+    if (role?.role !== "admin") {
+      throw new Error("Admin only");
+    }
+
+    const existing = await ctx.db
+      .query("userPlans")
+      .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { plan, updatedAt: Date.now() });
+    } else {
+      await ctx.db.insert("userPlans", {
+        userId: targetUserId,
+        plan,
+        updatedAt: Date.now(),
+      });
+    }
+    return { ok: true };
+  },
+});

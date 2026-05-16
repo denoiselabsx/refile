@@ -602,6 +602,14 @@ export const runJob = internalAction({
       );
     }
 
+    // Usage metering accumulators. Populated as the job runs and flushed to
+    // userUsage ONLY if the conversion completes successfully (see the
+    // recordConversion calls below). Failures leave these unrecorded so we
+    // never count or charge for them.
+    let groqInputTokens = 0;
+    let groqOutputTokens = 0;
+    let modalMs = 0;
+
     let ai;
     try {
       const result = await generateObject({
@@ -615,6 +623,11 @@ export const runJob = internalAction({
         temperature: 0.2,
       });
       ai = result.object;
+      // AI SDK exposes token counts on result.usage. Field names have varied
+      // across SDK versions; read both shapes defensively.
+      const u = (result as { usage?: Record<string, number> }).usage;
+      groqInputTokens = u?.inputTokens ?? u?.promptTokens ?? 0;
+      groqOutputTokens = u?.outputTokens ?? u?.completionTokens ?? 0;
     } catch (err) {
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
@@ -705,11 +718,17 @@ export const runJob = internalAction({
       const headers: Record<string, string> = {};
       if (modalToken) headers["Authorization"] = `Bearer ${modalToken}`;
 
+      const modalStart = Date.now();
       const res = await fetch(modalUrl, {
         method: "POST",
         headers,
         body: formData,
       });
+      // Wall-clock proxy for Modal compute. NOTE: this includes network +
+      // file-staging overhead and overestimates true sandbox time. For
+      // accurate Modal billing the worker should return `duration_ms` in its
+      // JSON response; we prefer that below when present.
+      modalMs = Date.now() - modalStart;
 
       if (!res.ok) {
         const text = await res.text();
@@ -721,7 +740,14 @@ export const runJob = internalAction({
         stdout: string;
         stderr: string;
         outputs: Array<{ filename: string; content_base64: string }>;
+        // Optional: present once the Modal worker is updated to report its
+        // own measured execution time. More accurate than the wall-clock
+        // proxy above, so prefer it when available.
+        duration_ms?: number;
       };
+      if (typeof result.duration_ms === "number" && result.duration_ms > 0) {
+        modalMs = result.duration_ms;
+      }
 
       logs = `$ ${ai.command}\n${result.stdout}\n${result.stderr}`;
 
@@ -743,17 +769,39 @@ export const runJob = internalAction({
         outputFilenames.push(out.filename);
       }
 
+      const succeeded = outputStorageIds.length > 0;
+
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
-        status: outputStorageIds.length > 0 ? "completed" : "failed",
+        status: succeeded ? "completed" : "failed",
         outputStorageIds: outputStorageIds as any,
         outputFilenames,
         sandboxLogs: logs.slice(-8000),
-        errorMessage:
-          outputStorageIds.length === 0
-            ? "Command ran but produced no outputs."
-            : undefined,
+        errorMessage: succeeded
+          ? undefined
+          : "Command ran but produced no outputs.",
       });
+
+      // Meter the conversion ONLY on real success. Counted here (not in the
+      // failure branch) so failed/no-output runs are never billed. bytes =
+      // sum of input file sizes from storage metadata.
+      if (succeeded) {
+        let bytesProcessed = 0;
+        for (const sid of promptDoc.inputStorageIds) {
+          const meta = await ctx.runQuery(
+            internal.runJobHelpers.storageSize,
+            { storageId: sid }
+          );
+          bytesProcessed += meta ?? 0;
+        }
+        await ctx.runMutation(internal.plans.recordConversion, {
+          userId: promptDoc.userId,
+          groqInputTokens,
+          groqOutputTokens,
+          modalMs,
+          bytesProcessed,
+        });
+      }
     } catch (err) {
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,

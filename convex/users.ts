@@ -36,12 +36,20 @@ export const me = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
+    // Plan + onboarding state (absence of a row = Free, not onboarded yet).
+    const planRow = await ctx.db
+      .query("userPlans")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+
     return {
       id: user._id,
       email: user.email,
       name: user.name,
       image: user.image,
       role: role?.role ?? "user",
+      plan: planRow?.plan ?? "free",
+      onboarded: planRow?.onboardedAt != null,
     };
   },
 });

@@ -8,6 +8,15 @@ export const loadPrompt = internalQuery({
   },
 });
 
+/** Byte size of a stored file from system metadata. Used for usage metering. */
+export const storageSize = internalQuery({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    const meta = await ctx.db.system.get(storageId);
+    return meta?.size ?? 0;
+  },
+});
+
 /**
  * Load up to `limit` prior turns from the same chat (turns earlier than
  * `beforeTurnIndex`), most recent last. Used to give the AI conversation context.

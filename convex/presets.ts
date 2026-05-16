@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { assertCanCreatePreset } from "./plans";
 
 /* ──────────────────────────────────────────────────────────────── *
  *  Queries
@@ -192,6 +193,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not signed in");
+    await assertCanCreatePreset(ctx, userId);
     return ctx.db.insert("presets", {
       ...args,
       userId,

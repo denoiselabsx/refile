@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { assertWithinQuota } from "./plans";
 
 /* ──────────────────────────────────────────────────────────────── *
  *  File upload helpers
@@ -143,6 +144,26 @@ export const submit = mutation({
 
     // No input files? That's OK — the AI may answer in chat mode.
     // If it picks command mode it will fail with a clear error.
+
+    // Quota gate. Resolve real byte sizes from Convex storage metadata so the
+    // file-size cap is enforced on actual bytes, not a client-claimed number.
+    // We cap on the largest single file (single-file plans) / total bytes
+    // (batch plans) — assertWithinQuota receives the sum, which is the
+    // largest file when there is only one. Runs only for command-capable
+    // requests (i.e. when files are present); pure chat turns are free.
+    if (inputStorageIds.length > 0) {
+      let totalBytes = 0;
+      for (const sid of inputStorageIds) {
+        const meta = await ctx.db.system.get(sid);
+        totalBytes += meta?.size ?? 0;
+      }
+      await assertWithinQuota(
+        ctx,
+        userId,
+        inputStorageIds.length,
+        totalBytes
+      );
+    }
 
     const promptId = await ctx.db.insert("prompts", {
       userId,

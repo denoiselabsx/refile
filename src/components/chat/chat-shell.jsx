@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/auth-context";
+import { UsageMeter } from "@/components/usage-meter";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { APP_NAV } from "@/lib/nav";
@@ -280,6 +281,8 @@ export function ChatShell({ chatId = null }) {
           </ul>
         )}
       </div>
+
+      <UsageMeter />
     </>
   );
 

@@ -3,6 +3,7 @@
 import { AppSidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { Footer } from "./footer";
+import { OnboardingFlow } from "@/components/onboarding-flow";
 import { useAuth } from "@/contexts/auth-context";
 
 /**
@@ -38,6 +39,7 @@ export function AppShell({
         <AppSidebar />
         <div className={`h-full lg:pl-14 ${className}`}>{children}</div>
         {showFooter && <Footer />}
+        <OnboardingFlow />
       </div>
     );
   }
