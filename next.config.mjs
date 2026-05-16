@@ -1,10 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Allow the ngrok tunnel host to load Next.js dev resources (HMR, JS
-  // bundles). Without this, pages render but client JS is blocked, so
-  // things like the /login/google redirect hang forever. Dev-only;
-  // harmless in production builds.
-  allowedDevOrigins: ["hangup-scholar-raven.ngrok-free.dev"],
+  // If you tunnel dev (e.g. ngrok) for webhook/OAuth testing, add the
+  // tunnel host here so Next.js serves its dev resources to it, e.g.:
+  //   allowedDevOrigins: ["your-subdomain.ngrok-free.dev"],
+  // Not needed for plain http://localhost:3000.
 };
 
 export default nextConfig;

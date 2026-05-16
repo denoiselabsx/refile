@@ -806,8 +806,10 @@ export function ChatShell({ chatId = null }) {
                     )}
                     {isDark ? "Light mode" : "Dark mode"}
                   </DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    <Settings className="size-3.5" /> Settings
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">
+                      <Settings className="size-3.5" /> Settings
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

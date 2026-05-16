@@ -183,18 +183,18 @@ export function Composer({
 
       {/* Controls row */}
       <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1.5 sm:px-2.5 sm:pb-2.5 sm:pt-2">
-        <div>
+        <div className="flex items-center">
           {onOpenUploads && (
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
               onClick={onOpenUploads}
               aria-label="Attach files"
               title="Attach files"
+              className="inline-flex h-9 items-center gap-2 rounded-full px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]"
             >
               <Paperclip className="size-[18px]" />
-            </Button>
+              <span className="hidden sm:inline">Attach</span>
+            </button>
           )}
         </div>
         <Button
@@ -203,7 +203,7 @@ export function Composer({
           disabled={!canSend}
           aria-label="Send"
           loading={isBusy}
-          className="rounded-full"
+          className="size-9 rounded-full"
         >
           {!isBusy && <ArrowUp className="size-[18px]" />}
         </Button>

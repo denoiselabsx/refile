@@ -70,11 +70,11 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
             <TooltipTrigger asChild>
               <Link
                 href="/dashboard"
-                className="mb-2 flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted group-hover:w-full group-hover:justify-start group-hover:px-2"
+                className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-foreground text-background shadow-sm transition-all hover:opacity-90 active:scale-[0.97] group-hover:w-full group-hover:justify-start group-hover:px-3"
                 aria-label="New chat"
               >
-                <Plus className="size-4" />
-                <span className="ml-2 hidden text-[12.5px] font-medium group-hover:inline">
+                <Plus className="size-4 shrink-0" />
+                <span className="ml-2 hidden whitespace-nowrap text-[12.5px] font-semibold group-hover:inline">
                   New chat
                 </span>
               </Link>
@@ -91,16 +91,19 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-md transition-colors group-hover:w-full group-hover:justify-start group-hover:px-2",
+                      "relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors group-hover:w-full group-hover:justify-start group-hover:px-3",
                       active
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        ? "bg-muted font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                     )}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
                   >
-                    <Icon className="size-4" />
-                    <span className="ml-2 hidden text-[12.5px] font-medium group-hover:inline">
+                    {active && (
+                      <span className="absolute left-0 top-1/2 hidden h-4 w-0.5 -translate-y-1/2 rounded-full bg-foreground group-hover:block" />
+                    )}
+                    <Icon className="size-4 shrink-0" />
+                    <span className="ml-2 hidden whitespace-nowrap text-[12.5px] group-hover:inline">
                       {item.label}
                     </span>
                   </Link>
@@ -129,7 +132,7 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
               <button
                 onClick={() => setTheme(isDark ? "light" : "dark")}
                 aria-label="Toggle theme"
-                className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]"
               >
                 {mounted ? (
                   isDark ? <Sun className="size-4" /> : <Moon className="size-4" />
@@ -146,7 +149,7 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex size-9 items-center justify-center rounded-md transition-colors hover:bg-muted"
+                className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-muted active:scale-[0.97]"
                 aria-label="Account menu"
               >
                 <Avatar className="size-7">
@@ -179,8 +182,10 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
                   </DropdownMenuItem>
                 );
               })}
-              <DropdownMenuItem disabled>
-                <Settings className="size-3.5" /> Settings
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Settings className="size-3.5" /> Settings
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
