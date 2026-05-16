@@ -16,12 +16,14 @@ import {
   FileText,
   ScanText,
   FileCode,
+  Check,
+  Download,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 
 import { Spotlight } from "@/components/spotlight";
+import { DemoVideo } from "@/components/demo-video";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
@@ -142,21 +144,24 @@ const CAPABILITIES = [
   },
 ];
 
+// Outcome-focused — deliberately NO raw shell commands. The product hides
+// the command (users "need not know"); the landing must match that promise
+// and not scare non-technical visitors with a wall of ffmpeg flags.
 const SHOWCASE = [
   {
-    prompt: "Extract audio from this MP4 as a clean 192kbps MP3.",
-    command: "ffmpeg -i input.mp4 -vn -ab 192k -ar 44100 -y output.mp3",
-    tool: "FFmpeg",
+    prompt: "Extract the audio from this video as a clean MP3.",
+    result: "song.mp3",
+    note: "192 kbps · ready in seconds",
   },
   {
-    prompt: "Merge these three PDFs and compress to 1.2 MB.",
-    command: "qpdf --empty --pages a.pdf b.pdf c.pdf -- merged.pdf",
-    tool: "qpdf",
+    prompt: "Merge these three PDFs and shrink it under 2 MB.",
+    result: "merged.pdf",
+    note: "3 files → 1 · 1.2 MB",
   },
   {
-    prompt: "Resize every image to 1080p, keep aspect, save as webp.",
-    command: "magick mogrify -resize 1920x1080 -format webp -quality 82 *.jpg",
-    tool: "ImageMagick",
+    prompt: "Resize every photo to 1080p and save as WebP.",
+    result: "12 images",
+    note: "WebP · aspect kept",
   },
 ];
 
@@ -263,6 +268,34 @@ export default function Home() {
             className="mt-12 sm:mt-20"
           >
             <ShowcaseCard />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ───── Demo video ───── */}
+      <section className="border-t border-border/70 bg-subtle/30">
+        <div className="mx-auto max-w-5xl px-5 py-20 sm:py-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              See it in action
+            </p>
+            <h2 className="text-h1-serif mt-3 text-balance">
+              Watch a file get done{" "}
+              <em className="text-muted-foreground">in seconds.</em>
+            </h2>
+            <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-muted-foreground">
+              No setup, no commands. Describe the outcome, get the file.
+            </p>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="mt-12 sm:mt-14"
+          >
+            <DemoVideo />
           </motion.div>
         </div>
       </section>
@@ -488,13 +521,24 @@ function ShowcaseCard() {
               <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
                 <Sparkles className="size-3" />
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
-                <Badge variant="outline" className="font-mono text-[10.5px]">
-                  {item.tool}
-                </Badge>
-                <pre className="code-block max-w-full overflow-x-auto">
-                  {item.command}
-                </pre>
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
+                    <Check className="size-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-foreground">
+                      {item.result}
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {item.note}
+                    </p>
+                  </div>
+                  <span className="ml-1 inline-flex items-center gap-1 rounded-lg bg-foreground px-2.5 py-1.5 text-[11.5px] font-medium text-background">
+                    <Download className="size-3" />
+                    Download
+                  </span>
+                </div>
               </div>
             </div>
           </motion.div>

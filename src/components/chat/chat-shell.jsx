@@ -141,6 +141,23 @@ export function ChatShell({ chatId = null }) {
     setUploadsOpen(true);
   };
 
+  // Composer paperclip handler. The Uploads panel is ALWAYS visible on
+  // desktop (it's the left sidebar) but is a slide-over drawer on mobile.
+  // So: on mobile, open the drawer so the user sees/manages uploads; on
+  // desktop the panel is already there, so go straight to the OS picker
+  // (the picked file lands in that visible panel). Either way the click
+  // does something useful and routes through the uploads section.
+  const handleComposerAttach = () => {
+    const isDesktop =
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches;
+    if (isDesktop) {
+      uploadsInputRef.current?.click();
+    } else {
+      openUploads();
+    }
+  };
+
   const upsertFiles = (items) => {
     if (!items?.length) return;
     setUploads((prev) => {
@@ -860,7 +877,7 @@ export function ChatShell({ chatId = null }) {
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 pt-2.5 sm:px-6 sm:pb-5 sm:pt-4">
               <Composer
                 onSubmit={handleSubmit}
-                onOpenUploads={() => uploadsInputRef.current?.click()}
+                onOpenUploads={handleComposerAttach}
                 isBusy={isBusy}
                 autoFocus
                 initialPrompt={initialPrompt}

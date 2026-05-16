@@ -130,23 +130,29 @@ export function Composer({
       <AnimatePresence>
         {mentionOptions.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 4 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            className="absolute -top-2 left-2 right-2 z-10 -translate-y-full overflow-hidden rounded-xl border border-border bg-card shadow-lg"
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute -top-2 left-2 right-2 z-10 -translate-y-full overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
           >
-            <ul className="max-h-52 overflow-auto py-1">
+            <p className="border-b border-border/60 px-3 py-2 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
+              Mention a file
+            </p>
+            <ul className="max-h-56 overflow-auto p-1.5">
               {mentionOptions.map((name, idx) => (
                 <li key={name}>
                   <button
                     type="button"
                     onClick={() => applyMention(name)}
                     className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px]",
-                      idx === mentionIndex ? "bg-muted" : "hover:bg-muted/60"
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] transition-colors",
+                      idx === mentionIndex
+                        ? "bg-muted text-foreground"
+                        : "text-foreground/80 hover:bg-muted/60"
                     )}
                   >
-                    <span className="text-muted-foreground">@</span>
+                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate text-mono">{name}</span>
                   </button>
                 </li>
@@ -176,9 +182,12 @@ export function Composer({
           )}
           style={{ minHeight: "24px" }}
         />
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Type @ to mention uploaded files
-        </p>
+        {!prompt && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground/70">
+            Type <span className="text-mono text-foreground/60">@</span> to
+            reference an uploaded file
+          </p>
+        )}
       </div>
 
       {/* Controls row */}

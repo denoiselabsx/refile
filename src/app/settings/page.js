@@ -12,11 +12,11 @@ import {
   Trash2,
   LogOut,
   ArrowRight,
+  ArrowLeft,
   Sun,
   Moon,
   Monitor,
 } from "lucide-react";
-import { AppShell } from "@/components/shell/app-shell";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -60,11 +60,9 @@ export default function SettingsPage() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <AppShell mode="app">
-        <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">
-          Loading…
-        </div>
-      </AppShell>
+      <div className="flex min-h-screen items-center justify-center bg-background text-[13px] text-muted-foreground">
+        Loading…
+      </div>
     );
   }
 
@@ -75,8 +73,21 @@ export default function SettingsPage() {
   ];
 
   return (
-    <AppShell mode="app">
-      <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 py-8 sm:px-6 sm:py-12">
+    <div className="min-h-screen bg-background">
+      {/* Sticky top bar with back button — standalone page, no app sidebar */}
+      <div className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 sm:px-6">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Link>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="mb-8">
           <h1 className="font-serif text-[30px] leading-tight tracking-tight text-foreground sm:text-[36px]">
             Settings
@@ -239,6 +250,6 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
-    </AppShell>
+    </div>
   );
 }
