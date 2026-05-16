@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { useAuth } from "@/contexts/auth-context";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
@@ -68,9 +69,7 @@ export function AIResponse({ prompt }) {
 
       {/* ── Chat reply (no file op) ── */}
       {!isPending && !isRunning && prompt.aiKind === "chat" && prompt.aiMessage && (
-        <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
-          {prompt.aiMessage}
-        </div>
+        <ChatMarkdown>{prompt.aiMessage}</ChatMarkdown>
       )}
 
       {/* ── Success: ONE cohesive result card. Summary header +

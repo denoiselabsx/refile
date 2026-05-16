@@ -863,7 +863,6 @@ export function ChatShell({ chatId = null }) {
                 autoFocus
                 initialPrompt={initialPrompt}
                 fileMentions={resolvedFileMentions}
-                showMobileAttachButton
                 placeholder={
                   inExistingChat && turns.length > 0
                     ? "Follow up — ask anything…"

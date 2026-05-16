@@ -14,7 +14,6 @@ export function Composer({
   placeholder = "Describe what to do with your files…",
   autoFocus = false,
   fileMentions = [],
-  showMobileAttachButton = false,
   // Optional initial prompt text (e.g. "Use preset" → preset name + description).
   initialPrompt = "",
 }) {
@@ -185,14 +184,14 @@ export function Composer({
       {/* Controls row */}
       <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1.5 sm:px-2.5 sm:pb-2.5 sm:pt-2">
         <div>
-          {showMobileAttachButton && (
+          {onOpenUploads && (
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={onOpenUploads}
-              aria-label="Open uploads"
-              className="lg:hidden"
+              aria-label="Attach files"
+              title="Attach files"
             >
               <Paperclip className="size-[18px]" />
             </Button>
