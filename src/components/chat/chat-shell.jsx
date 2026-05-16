@@ -865,7 +865,7 @@ export function ChatShell({ chatId = null }) {
                 }
               />
               <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">
-                ReFile picks the right tool · always returns the command it ran
+                ReFile is an AI and can make mistakes. Check important results.
               </p>
             </div>
           </div>

@@ -220,15 +220,11 @@ export default function DocsPage() {
             </Anchor>
 
             <Anchor id="reading-response" title="Reading the AI's response">
-              <p>Every response has three parts:</p>
+              <p>Every response has two parts:</p>
               <ul className="ml-4 list-disc space-y-1.5">
                 <li>
                   <strong>What this does</strong> — a one-sentence summary in
-                  plain language.
-                </li>
-                <li>
-                  <strong>Command</strong> — the exact shell command that ran.
-                  Copy it, audit it, paste it into your own terminal.
+                  plain language of the operation ReFile performed.
                 </li>
                 <li>
                   <strong>Inputs / Outputs</strong> — the files involved, with

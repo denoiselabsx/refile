@@ -9,7 +9,6 @@ import {
   Workflow,
   Mic,
   ShieldCheck,
-  Terminal,
   Sparkles,
   Image as ImageIcon,
   Video,
@@ -29,8 +28,8 @@ import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 const FEATURES = [
   {
     icon: Wand2,
-    title: "Natural language ↔ shell",
-    body: "Describe the outcome. We translate it into the exact ImageMagick, FFmpeg, Poppler, or Pandoc command — and run it.",
+    title: "Describe it, get it done",
+    body: "Say what you want in plain words. ReFile figures out the right tool — ImageMagick, FFmpeg, Poppler, Pandoc — and does it. No commands, no flags, no manuals.",
   },
   {
     icon: Mic,
@@ -48,9 +47,9 @@ const FEATURES = [
     body: "Chain presets together on a canvas. Build deterministic, repeatable file pipelines.",
   },
   {
-    icon: Terminal,
-    title: "Command + output",
-    body: "You never lose sight of what ran. Every result ships with the exact command — copy, audit, re-run.",
+    icon: Sparkles,
+    title: "Just the result",
+    body: "No terminal, no jargon. Drop a file, describe the outcome, download what you asked for. ReFile handles everything in between.",
   },
   {
     icon: ShieldCheck,
@@ -215,10 +214,10 @@ export default function Home() {
           >
             Convert, compress, resize, crop, rotate, merge, split, extract, transcribe,
             redact, watermark, OCR — anything ffmpeg, ImageMagick, Ghostscript, or qpdf
-            can do, ReFile can do. Type or speak the result you want. We pick the tool,
-            run it in a sandbox, and show you the exact command.
+            can do, ReFile can do. Type or speak the result you want — ReFile
+            handles the rest and hands back the finished file.
             <span className="block mt-1.5 text-foreground/80">
-              Any file. Any operation. No upload limits, no watermarks, no black box.
+              Any file. Any operation. No tools to learn, no upload limits, no watermarks.
             </span>
           </motion.p>
 

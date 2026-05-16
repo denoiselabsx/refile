@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
-  Copy,
   Download,
-  Terminal,
   FileDown,
-  FileInput,
-  Sparkles,
   AlertTriangle,
   Save,
   Loader2,
@@ -22,7 +17,6 @@ import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 export function AIResponse({ prompt }) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const [copied, setCopied] = useState(false);
 
   if (!prompt) return null;
 
@@ -30,17 +24,6 @@ export function AIResponse({ prompt }) {
     prompt.status === "pending" || prompt.status === "generating";
   const isRunning = prompt.status === "running";
   const isFailed = prompt.status === "failed";
-
-  const copyCommand = async () => {
-    if (!prompt.aiCommand) return;
-    try {
-      await navigator.clipboard.writeText(prompt.aiCommand);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      toast.error("Couldn't copy");
-    }
-  };
 
   const handleSaveAsPreset = () => {
     if (!isAuthenticated) {
@@ -66,177 +49,124 @@ export function AIResponse({ prompt }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-[12px]">
-        {isPending ? (
-          <>
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-            <span className="text-muted-foreground">
-              {prompt.status === "generating"
-                ? "Generating command…"
-                : "Queued…"}
-            </span>
-          </>
-        ) : isRunning ? (
-          <>
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-            <span className="text-muted-foreground">Running in sandbox…</span>
-          </>
-        ) : isFailed ? (
-          <>
-            <AlertTriangle className="size-3.5 text-destructive" />
-            <span className="text-destructive">Processing failed</span>
-          </>
-        ) : (
-          <>
-            <span className="inline-flex size-1.5 rounded-full bg-success" />
-            <span className="text-muted-foreground">Ready</span>
-          </>
-        )}
-      </div>
-
-      {isFailed && prompt.errorMessage && (
-        <div className="surface border-destructive/40 bg-destructive/5 p-4 text-[13px] text-destructive">
-          {prompt.errorMessage}
+      {/* ── In-progress: a single calm status line ── */}
+      {(isPending || isRunning) && (
+        <div className="surface flex items-center gap-3 px-4 py-3.5">
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="text-[13.5px] font-medium text-foreground">
+              {isRunning ? "Working on it…" : "Understanding your request…"}
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {isRunning
+                ? "Processing your files securely. This usually takes a few seconds."
+                : "Figuring out the best way to do this."}
+            </p>
+          </div>
         </div>
       )}
 
-      {prompt.aiKind === "chat" && prompt.aiMessage && (
-        <div className="text-[14px] leading-relaxed text-foreground whitespace-pre-wrap">
+      {/* ── Chat reply (no file op) ── */}
+      {!isPending && !isRunning && prompt.aiKind === "chat" && prompt.aiMessage && (
+        <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
           {prompt.aiMessage}
         </div>
       )}
 
-      {prompt.aiKind !== "chat" && prompt.aiDescription && (
-        <div className="surface p-4">
-          <div className="mb-1.5 flex items-center gap-2 text-[12px] text-muted-foreground">
-            <Sparkles className="size-3.5" />
-            <span>What this does</span>
-          </div>
-          <p className="text-[13.5px] leading-relaxed text-foreground">
-            {prompt.aiDescription}
-          </p>
-        </div>
-      )}
-
-      {prompt.aiCommand && (
-        <div className="surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Terminal className="size-3.5" />
-              <span>Command</span>
-              {prompt.aiTool && (
-                <>
-                  <span className="opacity-50">·</span>
-                  <span className="capitalize">{prompt.aiTool}</span>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
+      {/* ── Success: ONE cohesive result card. Summary header +
+           outputs as the hero (the file is what they came for). ── */}
+      {!isPending &&
+        !isRunning &&
+        !isFailed &&
+        prompt.aiKind !== "chat" &&
+        (prompt.outputUrls?.length > 0 ||
+          prompt.aiDescription ||
+          prompt.aiCommand) && (
+          <div className="surface overflow-hidden">
+            <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[13.5px] font-medium leading-snug text-foreground">
+                  <Check className="size-3.5 shrink-0 text-success" />
+                  {prompt.aiDescription || "Done — your files are ready"}
+                </p>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {prompt.outputUrls?.length
+                    ? `${prompt.outputUrls.length} file${
+                        prompt.outputUrls.length === 1 ? "" : "s"
+                      } ready to download`
+                    : "Completed"}
+                </p>
+              </div>
               {!HIDE_LAUNCH_FEATURES && prompt.aiCommandTemplate && (
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={handleSaveAsPreset}
                   disabled={!isAuthenticated}
+                  className="shrink-0"
                 >
-                  <Save className="size-3.5" /> Save as preset
+                  <Save className="size-3.5" /> Save preset
                 </Button>
               )}
-              <Button size="sm" variant="ghost" onClick={copyCommand}>
-                {copied ? (
-                  <Check className="size-3.5" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-                {copied ? "Copied" : "Copy"}
-              </Button>
             </div>
-          </div>
-          <pre className="code-block rounded-none border-0 bg-transparent">
-            {prompt.aiCommand}
-          </pre>
-        </div>
-      )}
 
-      {prompt.aiKind !== "chat" &&
-        (prompt.inputFilenames?.length > 0 ||
-          prompt.outputUrls?.length > 0) && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {prompt.inputFilenames?.length > 0 && (
-            <div className="surface p-4">
-              <div className="mb-2.5 flex items-center gap-2 text-[12px] text-muted-foreground">
-                <FileInput className="size-3.5" />
-                <span>Inputs ({prompt.inputFilenames.length})</span>
-              </div>
-              <ul className="space-y-1.5">
-                {prompt.inputFilenames.map((n, i) => (
-                  <li
-                    key={i}
-                    className="truncate rounded-md bg-muted/50 px-2.5 py-1.5 text-mono text-[12px]"
-                    title={n}
-                  >
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {prompt.outputUrls?.length > 0 && (
-            <div className="surface p-4">
-              <div className="mb-2.5 flex items-center gap-2 text-[12px] text-muted-foreground">
-                <FileDown className="size-3.5" />
-                <span>Outputs ({prompt.outputUrls.length})</span>
-              </div>
-              <ul className="space-y-1.5">
+            {prompt.outputUrls?.length > 0 && (
+              <ul className="divide-y divide-border/60">
                 {prompt.outputUrls.map((out) => (
                   <li
                     key={out.storageId}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-2.5 py-1.5"
+                    className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
                   >
-                    <span
-                      className="truncate text-mono text-[12px]"
-                      title={out.filename}
-                    >
-                      {out.filename}
-                    </span>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <FileDown className="size-4 shrink-0 text-muted-foreground" />
+                      <span
+                        className="truncate text-[13px] font-medium text-foreground"
+                        title={out.filename}
+                      >
+                        {out.filename}
+                      </span>
+                    </div>
                     {out.url && (
                       <a
                         href={out.url}
                         download={out.filename}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
                       >
                         <Download className="size-3.5" />
+                        Download
                       </a>
                     )}
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
-
-          {prompt.filesExpired &&
-            !prompt.outputUrls?.length &&
-            prompt.status === "completed" && (
-              <div className="surface border-dashed p-3 text-[12px] text-muted-foreground">
-                Files expired — uploads and outputs are deleted after 24 hours.
-                Re-upload to run this again.
-              </div>
             )}
-        </div>
-      )}
 
-      {isFailed && prompt.sandboxLogs && (
-        <details className="surface">
-          <summary className="cursor-pointer px-4 py-2.5 text-[12px] text-muted-foreground">
-            Sandbox logs
-          </summary>
-          <pre className="code-block rounded-none border-0 bg-transparent text-[11px]">
-            {prompt.sandboxLogs}
-          </pre>
-        </details>
+            {prompt.filesExpired &&
+              !prompt.outputUrls?.length &&
+              prompt.status === "completed" && (
+                <p className="px-4 py-3 text-[12px] text-muted-foreground">
+                  Files expired — outputs are deleted after 24 hours. Re-upload
+                  to run this again.
+                </p>
+              )}
+          </div>
+        )}
+
+      {/* ── Failure: friendly, no logs/command leaked ── */}
+      {isFailed && (
+        <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">
+          <p className="flex items-center gap-1.5 font-medium text-foreground">
+            <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+            That one didn&apos;t work out
+          </p>
+          <p className="mt-1">
+            ReFile couldn&apos;t complete this one. Try rephrasing what you
+            want, or adjust the files and run it again — this attempt
+            wasn&apos;t counted toward your usage.
+          </p>
+        </div>
       )}
     </div>
   );
