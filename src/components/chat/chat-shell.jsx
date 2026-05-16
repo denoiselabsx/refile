@@ -858,7 +858,7 @@ export function ChatShell({ chatId = null }) {
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 pt-2.5 sm:px-6 sm:pb-5 sm:pt-4">
               <Composer
                 onSubmit={handleSubmit}
-                onOpenUploads={openUploads}
+                onOpenUploads={() => uploadsInputRef.current?.click()}
                 isBusy={isBusy}
                 autoFocus
                 initialPrompt={initialPrompt}
