@@ -3,6 +3,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { assertWithinQuota } from "./plans";
+import { publicPrompt } from "../lib/sanitize.js";
 
 /* ──────────────────────────────────────────────────────────────── *
  *  File upload helpers
@@ -36,11 +37,12 @@ export const listMine = query({
   handler: async (ctx, { limit }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    return ctx.db
+    const rows = await ctx.db
       .query("prompts")
       .withIndex("by_user_recent", (q) => q.eq("userId", userId))
       .order("desc")
       .take(limit ?? 30);
+    return rows.map(publicPrompt);
   },
 });
 
@@ -63,7 +65,9 @@ export const get = query({
         )
       : [];
 
-    return { ...prompt, outputUrls };
+    // Never ship the command machinery (tool names, raw commands, sandbox
+    // logs) to the browser — ReFile sells the outcome, not the toolbox.
+    return { ...publicPrompt(prompt), outputUrls };
   },
 });
 
@@ -212,6 +216,32 @@ export const patchAiResponse = internalMutation({
   },
   handler: async (ctx, { promptId, ...patch }) => {
     await ctx.db.patch(promptId, patch);
+  },
+});
+
+// Rewrites the whole pipelineSteps array. The array is small (≤6) and the
+// runJob loop owns it in memory, so a full rewrite per transition is simpler
+// and cheaper than index-addressed partial patches.
+export const patchPipeline = internalMutation({
+  args: {
+    promptId: v.id("prompts"),
+    pipelineSteps: v.array(
+      v.object({
+        description: v.string(),
+        tool: v.string(),
+        command: v.string(),
+        status: v.union(
+          v.literal("pending"),
+          v.literal("running"),
+          v.literal("completed"),
+          v.literal("failed")
+        ),
+        logs: v.optional(v.string()),
+      })
+    ),
+  },
+  handler: async (ctx, { promptId, pipelineSteps }) => {
+    await ctx.db.patch(promptId, { pipelineSteps });
   },
 });
 

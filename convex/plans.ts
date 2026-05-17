@@ -160,9 +160,14 @@ export const recordConversion = internalMutation({
     groqOutputTokens: v.number(),
     modalMs: v.number(),
     bytesProcessed: v.number(),
+    // How many conversions this run consumes. 1 for a single command; for a
+    // multi-step pipeline it's the step count (each step = 1 conversion).
+    // Token/modal/byte totals are passed already-summed and counted once.
+    conversions: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const month = monthKey();
+    const inc = args.conversions ?? 1;
     const existing = await ctx.db
       .query("userUsage")
       .withIndex("by_user_month", (q) =>
@@ -172,7 +177,7 @@ export const recordConversion = internalMutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        conversions: existing.conversions + 1,
+        conversions: existing.conversions + inc,
         groqInputTokens: existing.groqInputTokens + args.groqInputTokens,
         groqOutputTokens: existing.groqOutputTokens + args.groqOutputTokens,
         modalMs: existing.modalMs + args.modalMs,
@@ -182,13 +187,34 @@ export const recordConversion = internalMutation({
       await ctx.db.insert("userUsage", {
         userId: args.userId,
         month,
-        conversions: 1,
+        conversions: inc,
         groqInputTokens: args.groqInputTokens,
         groqOutputTokens: args.groqOutputTokens,
         modalMs: args.modalMs,
         bytesProcessed: args.bytesProcessed,
       });
     }
+  },
+});
+
+/** Internal: the user's plan id, pipeline step cap, and remaining monthly
+ * quota. runJob uses this to gate multi-step pipelines per plan AND to stop
+ * a hard-stop plan (Free) overshooting its cap via a pipeline — the submit
+ * quota gate runs before the step count is known, so it's re-checked here. */
+export const pipelineLimitForUser = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const planId = await planIdForUser(ctx, userId);
+    const plan = getPlan(planId);
+    const usage = await usageForUser(ctx, userId);
+    return {
+      planId,
+      maxPipelineSteps: plan.maxPipelineSteps ?? 1,
+      // Hard-stop = no pay-as-you-go (Free). Paid plans flow into overage,
+      // so they're allowed to exceed remaining quota.
+      hardStop: plan.overagePerConversion == null,
+      remaining: Math.max(0, plan.includedConversions - usage.conversions),
+    };
   },
 });
 

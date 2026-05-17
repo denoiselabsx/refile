@@ -145,6 +145,26 @@ export default defineSchema({
     outputFilenames: v.optional(v.array(v.string())),
     sandboxLogs: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    // Multi-tool pipeline (kind="pipeline"). One entry per step, in order.
+    // The whole array is rewritten on each step transition (≤6 entries).
+    // Only the LAST step's outputs become outputStorageIds; intermediates
+    // are discarded. Absent for single-command / chat turns.
+    pipelineSteps: v.optional(
+      v.array(
+        v.object({
+          description: v.string(),
+          tool: v.string(),
+          command: v.string(),
+          status: v.union(
+            v.literal("pending"),
+            v.literal("running"),
+            v.literal("completed"),
+            v.literal("failed")
+          ),
+          logs: v.optional(v.string()),
+        })
+      )
+    ),
     // Set by the cleanup cron once the blobs are deleted from storage.
     // The history row stays; only file URLs become unavailable.
     filesExpired: v.optional(v.boolean()),

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -8,16 +9,31 @@ import {
   AlertTriangle,
   Save,
   Loader2,
+  Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useAuth } from "@/contexts/auth-context";
+import { useUpgrade } from "@/contexts/upgrade-context";
+import { parseUpgradeError } from "../../lib/upgrade.js";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 
 export function AIResponse({ prompt }) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const { triggerUpgrade } = useUpgrade();
+
+  // A chat reply may carry a machine-readable upgrade tag (e.g. a pipeline
+  // that exceeds the plan). Open the upsell modal once; the user only ever
+  // sees the plain-English remainder, never the tag.
+  const upgradeParsed =
+    prompt?.aiKind === "chat" && prompt?.aiMessage
+      ? parseUpgradeError(prompt.aiMessage)
+      : null;
+  useEffect(() => {
+    if (upgradeParsed) triggerUpgrade(prompt.aiMessage);
+  }, [upgradeParsed, prompt?.aiMessage, triggerUpgrade]);
 
   if (!prompt) return null;
 
@@ -48,10 +64,55 @@ export function AIResponse({ prompt }) {
     router.push("/presets/create");
   };
 
+  const pipelineSteps = prompt.pipelineSteps;
+  const hasPipeline = pipelineSteps?.length > 0;
+
   return (
     <div className="space-y-3">
+      {/* ── Pipeline: per-step progress (multi-tool sequence) ── */}
+      {hasPipeline && (
+        <div className="surface overflow-hidden">
+          <div className="border-b border-border/70 px-4 py-3 text-[12px] font-medium text-muted-foreground">
+            Pipeline · {pipelineSteps.length} step
+            {pipelineSteps.length === 1 ? "" : "s"}
+          </div>
+          <ol className="divide-y divide-border/60">
+            {pipelineSteps.map((s, i) => (
+              <li key={i} className="flex items-start gap-3 px-4 py-3">
+                <span className="mt-0.5 shrink-0">
+                  {s.status === "completed" ? (
+                    <Check className="size-4 text-success" />
+                  ) : s.status === "running" ? (
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  ) : s.status === "failed" ? (
+                    <AlertTriangle className="size-4 text-destructive" />
+                  ) : (
+                    <Circle className="size-4 text-muted-foreground/40" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium leading-snug text-foreground">
+                    <span className="text-muted-foreground">{i + 1}.</span>{" "}
+                    {s.description}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {s.status === "completed"
+                      ? "Done"
+                      : s.status === "running"
+                        ? "Working…"
+                        : s.status === "failed"
+                          ? "Didn’t complete"
+                          : "Queued"}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {/* ── In-progress: a single calm status line ── */}
-      {(isPending || isRunning) && (
+      {(isPending || isRunning) && !hasPipeline && (
         <div className="surface flex items-center gap-3 px-4 py-3.5">
           <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
           <div className="min-w-0">
@@ -67,9 +128,12 @@ export function AIResponse({ prompt }) {
         </div>
       )}
 
-      {/* ── Chat reply (no file op) ── */}
+      {/* ── Chat reply (no file op). Upgrade tag is stripped — the user
+           sees only the plain message; the modal carries the upsell. ── */}
       {!isPending && !isRunning && prompt.aiKind === "chat" && prompt.aiMessage && (
-        <ChatMarkdown>{prompt.aiMessage}</ChatMarkdown>
+        <ChatMarkdown>
+          {upgradeParsed ? upgradeParsed.message : prompt.aiMessage}
+        </ChatMarkdown>
       )}
 
       {/* ── Success: ONE cohesive result card. Summary header +
@@ -158,12 +222,33 @@ export function AIResponse({ prompt }) {
         <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">
           <p className="flex items-center gap-1.5 font-medium text-foreground">
             <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-            That one didn&apos;t work out
+            Let&apos;s try that a different way
           </p>
           <p className="mt-1">
-            ReFile couldn&apos;t complete this one. Try rephrasing what you
-            want, or adjust the files and run it again — this attempt
-            wasn&apos;t counted toward your usage.
+            That request was a bit much to do in one shot. Two things that
+            almost always work:
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            <li className="flex gap-2">
+              <span className="text-foreground/60">1.</span>
+              <span>
+                Ask for <strong className="font-medium text-foreground">one
+                change at a time</strong> — e.g. &ldquo;make it black and
+                white&rdquo;, then &ldquo;now rotate it 180°&rdquo;, then
+                &ldquo;combine into a PDF&rdquo;. Each result feeds the next.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-foreground/60">2.</span>
+              <span>
+                Describe the <strong className="font-medium text-foreground">
+                end result</strong> in plain words rather than how to do it.
+              </span>
+            </li>
+          </ul>
+          <p className="mt-2 text-[12px]">
+            This attempt wasn&apos;t counted toward your usage — retry as
+            many times as you like.
           </p>
         </div>
       )}

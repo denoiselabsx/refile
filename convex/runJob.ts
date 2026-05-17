@@ -13,7 +13,7 @@ import { CONVERSION_EVENT_NAME } from "../lib/polar.js";
 import type { Id } from "./_generated/dataModel";
 
 /* ──────────────────────────────────────────────────────────────── *
- *  Structured AI response schema
+ *  MIME helpers
  * ──────────────────────────────────────────────────────────────── */
 
 const MIME_TYPES: Record<string, string> = {
@@ -50,11 +50,253 @@ function mimeFromFilename(name: string): string {
   return MIME_TYPES[ext] ?? "application/octet-stream";
 }
 
+/** Build a Blob from raw bytes via a fresh ArrayBuffer. Node's Buffer /
+ *  Uint8Array are ArrayBufferLike and trip strict TS's BlobPart check; an
+ *  ArrayBuffer is an unambiguous BlobPart. One copy — acceptable. */
+function bytesToBlob(bytes: Uint8Array, type: string): Blob {
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  return new Blob([ab], { type });
+}
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  Execution helpers — shared by the single-command and pipeline
+ *  paths so the validate→correct→Modal→meter contract is identical.
+ * ──────────────────────────────────────────────────────────────── */
+
+/** Thrown by runModal on a worker error or non-zero exit. Carries the
+ *  sandbox logs so the caller can persist them. */
+class StepError extends Error {
+  logs: string;
+  constructor(message: string, logs: string) {
+    super(message);
+    this.name = "StepError";
+    this.logs = logs;
+  }
+}
+
+function getModalConfig(): { url: string; token?: string } | null {
+  const url = process.env.MODAL_WORKER_URL;
+  if (!url) return null;
+  const token = process.env.MODAL_WORKER_TOKEN;
+  return token ? { url, token } : { url };
+}
+
+/**
+ * One Modal worker invocation: stage `files` as multipart, run `command`,
+ * collect declared outputs. Pure I/O — the caller must have already run
+ * validateCommand/correctCommand on `command`. Throws StepError on a
+ * worker error or non-zero exit.
+ */
+async function runModal(
+  cfg: { url: string; token?: string },
+  command: string,
+  files: Array<{ filename: string; blob: Blob }>,
+  expectedOutputs: string[]
+): Promise<{
+  outputs: Array<{ filename: string; bytes: Uint8Array }>;
+  logs: string;
+  durationMs: number;
+}> {
+  const formData = new FormData();
+  formData.append("command", command);
+  formData.append("expected_outputs", JSON.stringify(expectedOutputs));
+  for (const f of files) formData.append("files", f.blob, f.filename);
+
+  const headers: Record<string, string> = {};
+  if (cfg.token) headers["Authorization"] = `Bearer ${cfg.token}`;
+
+  const start = Date.now();
+  const res = await fetch(cfg.url, { method: "POST", headers, body: formData });
+  // Wall-clock proxy; replaced by the worker's measured duration_ms below.
+  let durationMs = Date.now() - start;
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new StepError(`Worker returned ${res.status}: ${text.slice(0, 500)}`, "");
+  }
+
+  const result = (await res.json()) as {
+    exit_code: number;
+    stdout: string;
+    stderr: string;
+    outputs: Array<{ filename: string; content_base64: string }>;
+    duration_ms?: number;
+  };
+  if (typeof result.duration_ms === "number" && result.duration_ms > 0) {
+    durationMs = result.duration_ms;
+  }
+
+  const logs = `$ ${command}\n${result.stdout}\n${result.stderr}`;
+  if (result.exit_code !== 0) {
+    throw new StepError(
+      `Command exited with code ${result.exit_code}.\n${logs.slice(-1200)}`,
+      logs
+    );
+  }
+
+  const outputs = result.outputs.map((o) => ({
+    filename: o.filename,
+    // Copy into a fresh ArrayBuffer-backed Uint8Array so it satisfies
+    // BlobPart (Node's Buffer is ArrayBufferLike and trips strict TS).
+    bytes: new Uint8Array(Buffer.from(o.content_base64, "base64")),
+  }));
+  return { outputs, logs, durationMs };
+}
+
+// Absolute step ceiling = the largest per-plan cap (Pro/Power = 12 in
+// lib/plans.js). Kept here as a hard safety bound independent of plan
+// lookup; keep in sync if a plan ever exceeds it.
+const PIPELINE_HARD_MAX = 12;
+
+/**
+ * Deterministic, pre-execution check of a pipeline plan. A plan that
+ * breaks ANY rule is rejected wholesale (the caller surfaces a chat
+ * reply). Enforces the per-command SECURITY CONTRACT on every step plus
+ * a linear-graph check: each step's inputs must be an original input or
+ * an earlier step's declared output. Returns an error string, or null.
+ */
+function validatePlan(
+  steps: Array<{
+    command?: string;
+    input_files?: string[];
+    output_files?: string[];
+  }>,
+  originalInputs: string[]
+): string | null {
+  if (!Array.isArray(steps) || steps.length < 2) {
+    return "a pipeline needs at least 2 steps";
+  }
+  // Global hard ceiling = the most any plan allows (Pro/Power = 12). The
+  // per-plan cap is enforced separately in runJob with an upsell; this is
+  // the absolute safety bound (action wall-clock + LLM plan reliability).
+  if (steps.length > PIPELINE_HARD_MAX) {
+    return `too many steps (max ${PIPELINE_HARD_MAX})`;
+  }
+
+  const available = new Set<string>(originalInputs);
+  const allOutputs = new Set<string>();
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const n = i + 1;
+    if (
+      !s.command ||
+      !Array.isArray(s.input_files) ||
+      !Array.isArray(s.output_files) ||
+      s.output_files.length === 0
+    ) {
+      return `step ${n} is missing a command or input/output filenames`;
+    }
+    const v = validateCommand(s.command);
+    if (!v.ok) return `step ${n}: ${v.reason}`;
+    for (const f of s.input_files) {
+      if (!available.has(f)) {
+        return `step ${n} reads '${f}', which is neither an original input nor produced by an earlier step`;
+      }
+    }
+    for (const f of s.output_files) {
+      if (originalInputs.includes(f)) {
+        return `step ${n} would overwrite the input '${f}'`;
+      }
+      if (allOutputs.has(f)) {
+        return `'${f}' is produced by more than one step`;
+      }
+      allOutputs.add(f);
+      available.add(f);
+    }
+  }
+  return null;
+}
+
+/**
+ * Meter + bill one successful conversion. bytesProcessed is the sum of
+ * ORIGINAL input sizes only — a pipeline is a single billable conversion,
+ * intermediates are not re-counted. Polar ingestion is best-effort and
+ * idempotent (keyed by promptId); a failure here never fails the job.
+ */
+async function meterSuccess(
+  ctx: any,
+  promptDoc: any,
+  promptId: Id<"prompts">,
+  groqInputTokens: number,
+  groqOutputTokens: number,
+  modalMs: number,
+  conversions: number = 1
+): Promise<void> {
+  let bytesProcessed = 0;
+  for (const sid of promptDoc.inputStorageIds) {
+    const meta = await ctx.runQuery(internal.runJobHelpers.storageSize, {
+      storageId: sid,
+    });
+    bytesProcessed += meta ?? 0;
+  }
+  await ctx.runMutation(internal.plans.recordConversion, {
+    userId: promptDoc.userId,
+    groqInputTokens,
+    groqOutputTokens,
+    modalMs,
+    bytesProcessed,
+    conversions,
+  });
+  try {
+    await ingestConversionToPolar(ctx, promptId, promptDoc.userId, conversions);
+  } catch (err) {
+    console.error(
+      `[runJob] Polar usage ingestion failed for ${promptId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  Structured AI response schema
+ * ──────────────────────────────────────────────────────────────── */
+
+// Single source of truth for the tool enum (used by both the single
+// command `tool` field and each pipeline step).
+const PIPELINE_TOOLS = [
+  "ffmpeg",
+  "imagemagick",
+  "qpdf",
+  "ghostscript",
+  "poppler",
+  "pandoc",
+  "tesseract",
+  "rembg",
+  "other",
+] as const;
+
+const PipelineStep = z.object({
+  description: z
+    .string()
+    .describe(
+      "One short sentence describing the OUTCOME for the end user — what they get, in plain language. NEVER name a tool, binary, flag, codec, or command (no 'ffmpeg', 'magick', 'libx264', '-vf', etc.). E.g. 'Convert your document to PDF', not 'Run soffice'."
+    ),
+  tool: z.enum(PIPELINE_TOOLS).describe("The primary tool this step uses."),
+  command: z
+    .string()
+    .describe(
+      "Single tool, single line. Obeys the SECURITY CONTRACT exactly like command mode — it is validated identically."
+    ),
+  input_files: z
+    .array(z.string())
+    .describe(
+      "Files this step reads. Step 1: original inputs only. Later steps: an original input OR a filename an earlier step listed in its output_files."
+    ),
+  output_files: z
+    .array(z.string())
+    .min(1)
+    .describe(
+      "Files this step produces. Unique across the whole plan; never an input filename."
+    ),
+});
+
 const AIResponse = z.object({
   kind: z
-    .enum(["command", "chat"])
+    .enum(["command", "chat", "pipeline"])
     .describe(
-      "'command' when the user wants a file operation; 'chat' for explanations, clarifications, questions, or anything that doesn't need to run a shell command."
+      "'command' for a single-tool file operation; 'pipeline' when the task needs DIFFERENT tools applied in sequence (provide steps); 'chat' for explanations, clarifications, questions, or anything that doesn't run a shell command."
     ),
   // Chat-only field.
   message: z
@@ -67,19 +309,11 @@ const AIResponse = z.object({
   description: z
     .string()
     .optional()
-    .describe("When kind='command', one sentence explaining the command."),
+    .describe(
+      "When kind='command', one short sentence describing the OUTCOME for the end user in plain language. NEVER name a tool, binary, flag, codec, or command (no 'ffmpeg', 'magick', 'libx264', '-crf', etc.). E.g. 'Compressed your video to about half the size', not 'Re-encoded with libx264 CRF 28'."
+    ),
   tool: z
-    .enum([
-      "ffmpeg",
-      "imagemagick",
-      "qpdf",
-      "ghostscript",
-      "poppler",
-      "pandoc",
-      "tesseract",
-      "rembg",
-      "other",
-    ])
+    .enum(PIPELINE_TOOLS)
     .optional()
     .describe("When kind='command', the primary tool used."),
   command: z
@@ -100,6 +334,12 @@ const AIResponse = z.object({
     .array(z.string())
     .optional()
     .describe("When kind='command', filenames the command will produce."),
+  steps: z
+    .array(PipelineStep)
+    .optional()
+    .describe(
+      "When kind='pipeline', the ordered steps (2–6). Step 1 reads the original inputs; each later step consumes an earlier step's outputs. Only the LAST step's output_files are delivered to the user."
+    ),
 });
 
 const SYSTEM_PROMPT = `You are ReFile — a precise, expert file-operations engine. You turn a
@@ -124,12 +364,27 @@ OPERATING PRINCIPLES (how an expert behaves here):
     do NOT use it — pick a recipe-book form or switch to chat.
   • Interpret intent like a human would (see the monochrome rule) — but
     never invent capabilities to satisfy a request.
-  • One tool, one line. If the task genuinely needs piping/chaining/
-    multiple tools, that is a chat reply explaining the limit — not a
-    command that will be auto-rejected.
+  • One tool, one line PER COMMAND. A single command never pipes or
+    chains. If one tool's own filter/operator chain can do everything
+    (most ffmpeg/ImageMagick multi-edits), that is kind="command". If
+    the task genuinely needs MULTIPLE DIFFERENT tools in sequence, emit
+    a PIPELINE (kind="pipeline") of single-tool steps — never a chained
+    command, and never a chat refusal.
   • When the request is ambiguous in a way that changes the output
     materially, ask ONE crisp clarifying question in chat instead of
     guessing.
+  • CAPABILITY HONESTY (general rule — applies to EVERY request, no
+    exceptions): before emitting a command, judge whether the allowed
+    tools can actually produce what was asked WITH HIGH CONFIDENCE. If
+    the specific transformation is not something you can do reliably
+    (you can't name a tool+flag you are SURE produces it), do NOT emit
+    a command that will fail in the sandbox. Instead reply in chat:
+    (1) say plainly this exact thing isn't something you can do, (2)
+    name the CLOSEST related thing you CAN do with the allowed tools,
+    (3) offer to do that. A failed run is the worst outcome; a helpful
+    "I can't do X, but I can do Y — want that?" is a good one. This is
+    the general handling for the entire long tail of unsupported or
+    exotic asks — reason about the capability, don't pattern-match.
 
 (Original one-liner, kept for continuity:) You translate
 natural-language file requests into single-line Linux shell commands
@@ -183,7 +438,7 @@ binary (magick → convert). This has one critical consequence:
 - Avoid IM7-only flags like \`-color-matrix\` chained in non-trivial ways.
 
 ══════════════════════════════════════════════════════════════════════
-DECIDE: chat OR command
+DECIDE: chat, command, OR pipeline
 ══════════════════════════════════════════════════════════════════════
 
 kind="chat" for anything that doesn't run a shell command. But ReFile is
@@ -216,11 +471,39 @@ If the user asks for a file operation but you have NO input files at
 all, switch to chat mode and ask them to attach one.
 
 ══════════════════════════════════════════════════════════════════════
+PIPELINE MODE — multi-tool sequences (kind="pipeline")
+══════════════════════════════════════════════════════════════════════
+
+Use kind="pipeline" ONLY when the request needs DIFFERENT tools applied
+in sequence and NO single tool can do it in one invocation. Examples:
+  • "convert this docx to pdf then compress it"  (soffice → gs)
+  • "extract page 1 as an image then OCR it"      (pdftoppm → tesseract)
+
+If ONE tool's own filter/operator chain does everything (most ffmpeg
+and ImageMagick multi-edits, e.g. resize+grayscale+strip in one magick
+call), that is kind="command", NOT a pipeline.
+
+Provide \`steps\` (2 to 6 items). Each step:
+  • is ONE tool, ONE line, and obeys the SECURITY CONTRACT exactly like
+    command mode — every step is validated identically.
+  • declares input_files and output_files with EXACT filenames.
+  • Step 1 reads ONLY the original input files. Every later step's
+    input_files must be EITHER an original input OR a filename that an
+    EARLIER step listed in its output_files. No forward references.
+  • output_files must be unique across the WHOLE plan and must never
+    reuse an input filename (rule 3 still holds per step).
+
+Only the LAST step's output_files are delivered to the user;
+intermediate files are discarded, so name the final outputs sensibly.
+A plan that breaks ANY of these is rejected wholesale and the user is
+told to do it step by step — so be conservative and exact.
+
+══════════════════════════════════════════════════════════════════════
 COMMAND RULES — these are absolute
 ══════════════════════════════════════════════════════════════════════
 
 1. **Quote every filename in single quotes.** \`magick 'in.png' -resize 50% 'out.png'\` — even if the name looks safe.
-2. **One line.** No \`&&\`, no \`;\`, no newlines, no backslash continuations. If a task needs two steps, use a tool that does both in one invocation, or refuse with a chat reply.
+2. **One line per command.** No \`&&\`, no \`;\`, no newlines, no backslash continuations in ANY command — this applies to every pipeline step too. If two steps use the SAME tool, use that tool's own filter/operator chain in one invocation. If they need DIFFERENT tools, use kind="pipeline" — never a chained command.
 3. **Never overwrite an input.** Output filenames must differ from input filenames.
 4. **Output names must not contain spaces** — use underscores. Add a descriptive suffix that hints at what changed: \`_compressed\`, \`_gray\`, \`_1080p\`, \`_page1\`, etc.
 5. **Reference the exact filenames you were given.** Do not invent placeholder names like 'input.pdf' or 'video.mp4'.
@@ -387,6 +670,13 @@ Linearize / web-optimize (does NOT compress):
 
 Remove password:
   qpdf --password=PASS --decrypt 'in.pdf' 'out_unlocked.pdf'
+
+Grayscale a whole PDF — Ghostscript, one command, any page count, stays
+a real PDF (no rasterizing):
+  gs -sDEVICE=pdfwrite -sColorConversionStrategy=Gray -sProcessColorModel=DeviceGray -dCompatibilityLevel=1.4 -dNOPAUSE -dQUIET -dBATCH -sOutputFile='out_gray.pdf' 'in.pdf'
+
+Rotate all pages of a PDF (qpdf --rotate; angle +90/180/270):
+  qpdf --rotate=+180 'in.pdf' 'out_rotated.pdf'
 
 PDF → PNG, ALL pages at 150 DPI (pdftoppm appends "-N" to the prefix automatically):
   pdftoppm -png -r 150 'in.pdf' 'out'
@@ -573,7 +863,8 @@ treat the previous turn's OUTPUT filenames as the INPUTS for this turn.
 
 ═══════════════════════════════════════════════════════════════════════
 
-Pick exactly ONE mode. Never include both a command and a chat message.
+Pick exactly ONE mode: chat, command, or pipeline. Never mix a
+command/steps with a chat message.
 
 ══════════════════════════════════════════════════════════════════════
 FINAL GATE — run this checklist on your command BEFORE you emit it
@@ -594,6 +885,10 @@ can't be fixed within the rules, switch to kind="chat" and explain.
   □ Output filename(s) differ from every input; no spaces; sensible
     suffix. output_files lists EVERY file the tool will actually create
     (including tool-appended -N page suffixes).
+  □ description (and every step description) is OUTCOME-only plain
+    English with ZERO tool/binary/flag/codec/command words — the user
+    must never see "ffmpeg", "magick", "libx264", "-vf", a filename
+    pair, or backticked code. "Compressed your video" — never how.
   □ This actually accomplishes what the user MEANT (intent, not just
     literal words — esp. monochrome→grayscale, %→multiplier).
   □ Tool traps cleared: no magick-subcommand form; libx264 has the
@@ -625,7 +920,8 @@ ANY box → kind="chat". A correct refusal beats a confident failure.`;
 async function ingestConversionToPolar(
   ctx: { runQuery: any; runMutation: any },
   promptId: Id<"prompts">,
-  userId: Id<"users">
+  userId: Id<"users">,
+  conversions: number = 1
 ): Promise<void> {
   const accessToken = process.env.POLAR_ACCESS_TOKEN;
   if (!accessToken) return; // billing not configured — local metering only
@@ -641,6 +937,10 @@ async function ingestConversionToPolar(
       process.env.POLAR_SERVER === "production" ? "production" : "sandbox",
   });
 
+  // ONE event per prompt (externalId = promptId keeps idempotency simple
+  // and a runJob retry can't double-ingest). A pipeline bills N via the
+  // metadata quantity, NOT N events — the Polar conversions meter MUST be
+  // configured to SUM `metadata.conversions` (not count events).
   await polar.events.ingest({
     events: [
       {
@@ -649,7 +949,7 @@ async function ingestConversionToPolar(
         externalCustomerId: userId,
         // Per-event dedup/attribution key (Polar docs: `external_id`).
         externalId: promptId,
-        metadata: { conversions: 1, promptId },
+        metadata: { conversions, promptId },
       },
     ],
   });
@@ -788,6 +1088,255 @@ export const runJob = internalAction({
       return;
     }
 
+    /* ── Pipeline: a sequence of single-tool steps, each step's
+     *    outputs feeding the next. One Groq call planned this; every
+     *    step still passes the same security + semantic gates. ── */
+    if (ai.kind === "pipeline") {
+      const planErr = validatePlan(ai.steps ?? [], promptDoc.inputFilenames);
+      if (planErr) {
+        // Technical reason stays in our logs only — the user gets a
+        // calm, non-technical nudge (no mention of steps/tools/plans).
+        console.log(`[runJob] plan rejected for ${promptId}: ${planErr}`);
+        await ctx.runMutation(internal.prompts.patchAiResponse, {
+          promptId,
+          aiKind: "chat",
+          aiMessage:
+            "I couldn't do that all in one go. Try splitting it into " +
+            "separate requests — do one change, then ask for the next.",
+          status: "completed",
+        });
+        return;
+      }
+
+      const modalCfg = getModalConfig();
+      if (!modalCfg) {
+        await ctx.runMutation(internal.prompts.patchExecution, {
+          promptId,
+          status: "failed",
+          errorMessage:
+            "Modal worker not configured. Set MODAL_WORKER_URL on the Convex deployment (see /modal/README.md).",
+        });
+        return;
+      }
+
+      // Per-plan entitlement. A pipeline longer than the plan allows is
+      // offered as an upgrade. The [[UPGRADE:...]] tag is machine-read by
+      // the UI to open the upsell; the visible text stays plain English.
+      const limit = await ctx.runQuery(
+        internal.plans.pipelineLimitForUser,
+        { userId: promptDoc.userId }
+      );
+      if (ai.steps!.length > limit.maxPipelineSteps) {
+        console.log(
+          `[runJob] pipeline over plan cap for ${promptId}: ` +
+            `${ai.steps!.length} > ${limit.maxPipelineSteps} (${limit.planId})`
+        );
+        await ctx.runMutation(internal.prompts.patchAiResponse, {
+          promptId,
+          aiKind: "chat",
+          aiMessage:
+            `[[UPGRADE:pipeline:${limit.planId}]] ` +
+            "That takes a few more moves than your current plan handles in " +
+            "one go. You can upgrade for longer multi-step requests — or " +
+            "split it into smaller asks and I'll do them one after another.",
+          status: "completed",
+        });
+        return;
+      }
+
+      // Each step = 1 conversion. The submit quota gate ran before the step
+      // count was known, so a hard-stop plan (Free, no pay-as-you-go) could
+      // otherwise overshoot its monthly cap by up to (cap-1) via one
+      // pipeline. Enforce the remaining allowance here. Paid plans flow
+      // into overage and are intentionally not blocked.
+      if (limit.hardStop && ai.steps!.length > limit.remaining) {
+        console.log(
+          `[runJob] pipeline exceeds remaining quota for ${promptId}: ` +
+            `${ai.steps!.length} > ${limit.remaining} (${limit.planId})`
+        );
+        await ctx.runMutation(internal.prompts.patchAiResponse, {
+          promptId,
+          aiKind: "chat",
+          aiMessage:
+            `[[UPGRADE:conversions:${limit.planId}]] ` +
+            "This multi-step request would use more than what's left in " +
+            "your free monthly allowance. Upgrade for more — with " +
+            "pay-as-you-go after that — or try one smaller change.",
+          status: "completed",
+        });
+        return;
+      }
+
+      const steps = ai.steps!;
+      // UI records. The whole array is rewritten on each transition.
+      const stepRecords = steps.map((s) => ({
+        description: s.description,
+        tool: s.tool,
+        command: s.command,
+        status: "pending" as
+          | "pending"
+          | "running"
+          | "completed"
+          | "failed",
+        logs: undefined as string | undefined,
+      }));
+
+      await ctx.runMutation(internal.prompts.patchAiResponse, {
+        promptId,
+        // aiKind stays "command" so the existing success/failure cards
+        // render unchanged; the stepper keys off pipelineSteps instead.
+        aiKind: "command",
+        // Outcome-only header. NEVER the tool list — the final step's
+        // description is the closest to "what the user ends up with".
+        // safeDescription() in publicPrompt is the last-resort net.
+        aiDescription:
+          ai.description ||
+          steps[steps.length - 1].description ||
+          "Your files are ready",
+        aiTool: steps[steps.length - 1].tool,
+        aiInputFiles: promptDoc.inputFilenames,
+        aiOutputFiles: steps[steps.length - 1].output_files,
+        status: "running",
+      });
+      await ctx.runMutation(internal.prompts.patchPipeline, {
+        promptId,
+        pipelineSteps: stepRecords,
+      });
+
+      // produced: filename -> Blob, seeded with the original inputs.
+      // Intermediates live here only (never persisted to storage).
+      const produced = new Map<string, Blob>();
+      for (let i = 0; i < promptDoc.inputStorageIds.length; i++) {
+        const blob = await ctx.storage.get(promptDoc.inputStorageIds[i]);
+        if (!blob) {
+          await ctx.runMutation(internal.prompts.patchExecution, {
+            promptId,
+            status: "failed",
+            errorMessage: `Missing input ${promptDoc.inputStorageIds[i]}`,
+          });
+          return;
+        }
+        produced.set(promptDoc.inputFilenames[i], blob);
+      }
+
+      let totalModalMs = 0;
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+
+        // Same deterministic semantic fixer as the single-command path
+        // (e.g. ffmpeg volume=50% -> 0.5), applied per step.
+        const correction = correctCommand(step.command);
+        const cmd = correction.command;
+        if (correction.notes.length) {
+          // Internal only — the user never sees the correction machinery.
+          console.log(
+            `[runJob] step ${i + 1} auto-corrected for ${promptId}: ${correction.notes.join(
+              " | "
+            )}`
+          );
+        }
+        stepRecords[i].command = cmd;
+        stepRecords[i].status = "running";
+        await ctx.runMutation(internal.prompts.patchPipeline, {
+          promptId,
+          pipelineSteps: stepRecords,
+        });
+
+        try {
+          const files: Array<{ filename: string; blob: Blob }> = [];
+          for (const fname of step.input_files) {
+            const blob = produced.get(fname);
+            if (!blob) {
+              throw new Error(
+                `step ${i + 1} input '${fname}' is unavailable`
+              );
+            }
+            files.push({ filename: fname, blob });
+          }
+
+          const r = await runModal(modalCfg, cmd, files, step.output_files);
+          totalModalMs += r.durationMs;
+
+          if (r.outputs.length === 0) {
+            throw new StepError(
+              `step ${i + 1} produced no outputs`,
+              r.logs
+            );
+          }
+
+          // Wire this step's outputs forward for later steps.
+          for (const out of r.outputs) {
+            produced.set(
+              out.filename,
+              bytesToBlob(out.bytes, mimeFromFilename(out.filename))
+            );
+          }
+          stepRecords[i].status = "completed";
+          stepRecords[i].logs = r.logs.slice(-4000);
+          await ctx.runMutation(internal.prompts.patchPipeline, {
+            promptId,
+            pipelineSteps: stepRecords,
+          });
+        } catch (err) {
+          // Partial failure: stop here, persist what ran. NOT metered
+          // or billed (meterSuccess is only reached on full success).
+          stepRecords[i].status = "failed";
+          stepRecords[i].logs =
+            err instanceof StepError ? err.logs.slice(-4000) : undefined;
+          await ctx.runMutation(internal.prompts.patchPipeline, {
+            promptId,
+            pipelineSteps: stepRecords,
+          });
+          await ctx.runMutation(internal.prompts.patchExecution, {
+            promptId,
+            status: "failed",
+            sandboxLogs:
+              err instanceof StepError ? err.logs.slice(-8000) : undefined,
+            errorMessage:
+              `Step ${i + 1}/${steps.length} (${step.tool}) failed: ` +
+              (err instanceof Error ? err.message : String(err)),
+          });
+          return;
+        }
+      }
+
+      // Deliver ONLY the last step's declared outputs.
+      const finalNames = steps[steps.length - 1].output_files;
+      const outputStorageIds: string[] = [];
+      const outputFilenames: string[] = [];
+      for (const fname of finalNames) {
+        const blob = produced.get(fname);
+        if (!blob) continue;
+        const storageId = await ctx.storage.store(blob);
+        outputStorageIds.push(storageId as string);
+        outputFilenames.push(fname);
+      }
+
+      const succeeded = outputStorageIds.length > 0;
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: succeeded ? "completed" : "failed",
+        outputStorageIds: outputStorageIds as any,
+        outputFilenames,
+        errorMessage: succeeded
+          ? undefined
+          : "Pipeline finished but produced no final outputs.",
+      });
+      if (succeeded) {
+        // Each step = 1 conversion (drawn from the monthly quota / overage).
+        await meterSuccess(
+          ctx,
+          promptDoc,
+          promptId,
+          groqInputTokens,
+          groqOutputTokens,
+          totalModalMs,
+          steps.length
+        );
+      }
+      return;
+    }
+
     if (!ai.command || !ai.output_files || ai.output_files.length === 0) {
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
@@ -799,16 +1348,19 @@ export const runJob = internalAction({
     }
 
     // Security gate: reject anything outside the recipe-book contract before
-    // it leaves Convex. Surfaces as a chat reply so the UI shows the reason
-    // and the user can rephrase, rather than a hard failure.
+    // it leaves Convex. The technical reason stays in our logs; the user
+    // gets a calm, non-technical nudge (no command/tool jargon).
     const validation = validateCommand(ai.command);
     if (!validation.ok) {
+      console.log(
+        `[runJob] command rejected for ${promptId}: ${validation.reason}`
+      );
       await ctx.runMutation(internal.prompts.patchAiResponse, {
         promptId,
         aiKind: "chat",
         aiMessage:
-          `I can't run that command safely — ${validation.reason}. ` +
-          `Try rephrasing your request, or ask for a simpler single-tool operation.`,
+          "I couldn't do that one safely. Try describing the result you " +
+          "want in a simpler way, or break it into a couple of steps.",
         status: "completed",
       });
       return;
@@ -828,16 +1380,12 @@ export const runJob = internalAction({
       );
       ai.command = correction.command;
     }
-    const correctionNote = correction.notes.length
-      ? `\n\n_Auto-corrected: ${correction.notes.join(" ")}_`
-      : "";
-
     await ctx.runMutation(internal.prompts.patchAiResponse, {
       promptId,
       aiKind: "command",
       aiCommand: ai.command,
       aiCommandTemplate: ai.command_template,
-      aiDescription: (ai.description ?? "") + correctionNote,
+      aiDescription: ai.description ?? "",
       aiTool: ai.tool,
       aiInputFiles: ai.input_files,
       aiOutputFiles: ai.output_files,
@@ -846,9 +1394,8 @@ export const runJob = internalAction({
 
     /* ── Step 2: Modal worker executes the command ────────────── */
 
-    const modalUrl = process.env.MODAL_WORKER_URL;
-    const modalToken = process.env.MODAL_WORKER_TOKEN;
-    if (!modalUrl) {
+    const modalCfg = getModalConfig();
+    if (!modalCfg) {
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
@@ -858,70 +1405,30 @@ export const runJob = internalAction({
       return;
     }
 
-    let logs = "";
     try {
-      // Stage inputs from Convex storage as a multipart payload
-      const formData = new FormData();
-      formData.append("command", ai.command);
-      formData.append("expected_outputs", JSON.stringify(ai.output_files));
-
+      // Stage inputs from Convex storage.
+      const files: Array<{ filename: string; blob: Blob }> = [];
       for (let i = 0; i < promptDoc.inputStorageIds.length; i++) {
         const storageId = promptDoc.inputStorageIds[i];
-        const filename = promptDoc.inputFilenames[i];
         const blob = await ctx.storage.get(storageId);
         if (!blob) throw new Error(`Missing input ${storageId}`);
-        formData.append("files", blob, filename);
+        files.push({ filename: promptDoc.inputFilenames[i], blob });
       }
 
-      const headers: Record<string, string> = {};
-      if (modalToken) headers["Authorization"] = `Bearer ${modalToken}`;
+      const { outputs, logs, durationMs } = await runModal(
+        modalCfg,
+        ai.command,
+        files,
+        ai.output_files
+      );
+      modalMs = durationMs;
 
-      const modalStart = Date.now();
-      const res = await fetch(modalUrl, {
-        method: "POST",
-        headers,
-        body: formData,
-      });
-      // Wall-clock proxy for Modal compute. NOTE: this includes network +
-      // file-staging overhead and overestimates true sandbox time. For
-      // accurate Modal billing the worker should return `duration_ms` in its
-      // JSON response; we prefer that below when present.
-      modalMs = Date.now() - modalStart;
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Worker returned ${res.status}: ${text.slice(0, 500)}`);
-      }
-
-      const result = (await res.json()) as {
-        exit_code: number;
-        stdout: string;
-        stderr: string;
-        outputs: Array<{ filename: string; content_base64: string }>;
-        // Optional: present once the Modal worker is updated to report its
-        // own measured execution time. More accurate than the wall-clock
-        // proxy above, so prefer it when available.
-        duration_ms?: number;
-      };
-      if (typeof result.duration_ms === "number" && result.duration_ms > 0) {
-        modalMs = result.duration_ms;
-      }
-
-      logs = `$ ${ai.command}\n${result.stdout}\n${result.stderr}`;
-
-      if (result.exit_code !== 0) {
-        throw new Error(
-          `Command exited with code ${result.exit_code}.\n${logs.slice(-1200)}`
-        );
-      }
-
-      // Upload outputs to Convex storage
+      // Upload outputs to Convex storage.
       const outputStorageIds: string[] = [];
       const outputFilenames: string[] = [];
-      for (const out of result.outputs) {
-        const bytes = Buffer.from(out.content_base64, "base64");
+      for (const out of outputs) {
         const storageId = await ctx.storage.store(
-          new Blob([bytes], { type: mimeFromFilename(out.filename) })
+          bytesToBlob(out.bytes, mimeFromFilename(out.filename))
         );
         outputStorageIds.push(storageId as string);
         outputFilenames.push(out.filename);
@@ -940,47 +1447,24 @@ export const runJob = internalAction({
           : "Command ran but produced no outputs.",
       });
 
-      // Meter the conversion ONLY on real success. Counted here (not in the
-      // failure branch) so failed/no-output runs are never billed. bytes =
-      // sum of input file sizes from storage metadata.
+      // Meter ONLY on real success, so failed/no-output runs are never
+      // counted or billed. meterSuccess is idempotent for Polar.
       if (succeeded) {
-        let bytesProcessed = 0;
-        for (const sid of promptDoc.inputStorageIds) {
-          const meta = await ctx.runQuery(
-            internal.runJobHelpers.storageSize,
-            { storageId: sid }
-          );
-          bytesProcessed += meta ?? 0;
-        }
-        await ctx.runMutation(internal.plans.recordConversion, {
-          userId: promptDoc.userId,
+        await meterSuccess(
+          ctx,
+          promptDoc,
+          promptId,
           groqInputTokens,
           groqOutputTokens,
-          modalMs,
-          bytesProcessed,
-        });
-
-        // Bill the conversion to Polar's usage meter. Idempotent: the
-        // billingTarget check + markPromptBilled flag mean a runJob retry
-        // can't double-ingest, and Polar's own event `externalId` (set to
-        // the promptId) is a second dedup layer. Best-effort — a Polar
-        // outage must never fail the user's conversion, so this is wrapped
-        // and only logs on error (usage can be reconciled later).
-        try {
-          await ingestConversionToPolar(ctx, promptId, promptDoc.userId);
-        } catch (err) {
-          console.error(
-            `[runJob] Polar usage ingestion failed for ${promptId}: ${
-              err instanceof Error ? err.message : String(err)
-            }`
-          );
-        }
+          modalMs
+        );
       }
     } catch (err) {
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
-        sandboxLogs: logs.slice(-8000),
+        sandboxLogs:
+          err instanceof StepError ? err.logs.slice(-8000) : undefined,
         errorMessage: err instanceof Error ? err.message : String(err),
       });
     }
