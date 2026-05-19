@@ -142,9 +142,13 @@ export function AIResponse({ prompt }) {
         !isRunning &&
         !isFailed &&
         prompt.aiKind !== "chat" &&
+        // Complete success = something the user can actually take away:
+        // downloadable outputs, OR the legitimate expired-files state
+        // (it succeeded earlier, blobs were GC'd after 24h). A bare
+        // description with no files is NOT a success — never show a green
+        // ✓ "Done" with nothing to download.
         (prompt.outputUrls?.length > 0 ||
-          prompt.aiDescription ||
-          prompt.aiCommand) && (
+          (prompt.filesExpired && prompt.status === "completed")) && (
           <div className="surface overflow-hidden">
             <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 py-3.5">
               <div className="min-w-0">
@@ -157,7 +161,7 @@ export function AIResponse({ prompt }) {
                     ? `${prompt.outputUrls.length} file${
                         prompt.outputUrls.length === 1 ? "" : "s"
                       } ready to download`
-                    : "Completed"}
+                    : "Completed earlier — files have since expired"}
                 </p>
               </div>
               {!HIDE_LAUNCH_FEATURES && prompt.aiCommandTemplate && (

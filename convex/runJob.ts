@@ -144,6 +144,33 @@ async function runModal(
   return { outputs, logs, durationMs };
 }
 
+/**
+ * Enforce the OUTPUT CONTRACT: a run is a *complete* success only if every
+ * file the AI declared in output_files actually came back, non-empty. The
+ * worker is told expectedOutputs but never enforced it — so a command that
+ * exits 0 yet drops files (e.g. a 10-page PDF→PNG that yields 7) was being
+ * marked "completed", shown as "Done — 7 files ready", and billed. That is a
+ * partial result misreported as a complete one.
+ *
+ * Returns the missing/empty declared names (empty array = complete success).
+ * A worker returning MORE files than declared is fine — that's the
+ * unknowable-count case (pdftoppm "all pages": the AI guesses out-1/out-2,
+ * the doc has 30; every declared name is still present, extras are bonus).
+ * The failure we catch is a DECLARED name that's absent or zero-byte.
+ */
+function verifyOutputs(
+  declared: string[],
+  produced: Array<{ filename: string; bytes: Uint8Array }>
+): string[] {
+  const byName = new Map(produced.map((o) => [o.filename, o.bytes]));
+  const missing: string[] = [];
+  for (const name of declared) {
+    const bytes = byName.get(name);
+    if (!bytes || bytes.byteLength === 0) missing.push(name);
+  }
+  return missing;
+}
+
 // Absolute step ceiling = the largest per-plan cap (Pro/Power = 12 in
 // lib/plans.js). Kept here as a hard safety bound independent of plan
 // lookup; keep in sync if a plan ever exceeds it.
@@ -1281,9 +1308,15 @@ export const runJob = internalAction({
           const r = await runModal(modalCfg, cmd, files, step.output_files);
           totalModalMs += r.durationMs;
 
-          if (r.outputs.length === 0) {
+          // OUTPUT CONTRACT, per step: every file this step declared must
+          // come back non-empty. A step that drops a declared output would
+          // otherwise feed a missing/broken intermediate to the next step
+          // and silently corrupt the whole chain. Fail at the step instead.
+          const missing = verifyOutputs(step.output_files, r.outputs);
+          if (missing.length > 0) {
             throw new StepError(
-              `step ${i + 1} produced no outputs`,
+              `step ${i + 1} exited 0 but did not produce all declared ` +
+                `outputs (missing: ${missing.join(", ")})`,
               r.logs
             );
           }
@@ -1450,6 +1483,31 @@ export const runJob = internalAction({
         ai.output_files
       );
       modalMs = durationMs;
+
+      // OUTPUT CONTRACT: complete success means every declared output_files
+      // entry actually came back non-empty. The command can exit 0 yet drop
+      // declared files — that's a partial result, not a success. Fail it
+      // BEFORE storing/metering so it's never billed or shown as "Done".
+      const missing = verifyOutputs(ai.output_files, outputs);
+      if (missing.length > 0) {
+        console.log(
+          `[runJob] incomplete outputs for ${promptId}: missing ${missing.join(
+            ", "
+          )} (declared ${ai.output_files.join(", ")}, got ${outputs
+            .map((o) => o.filename)
+            .join(", ")})`
+        );
+        await ctx.runMutation(internal.prompts.patchExecution, {
+          promptId,
+          status: "failed",
+          failureKind: "noOutput",
+          sandboxLogs: logs.slice(-8000),
+          errorMessage:
+            `Command exited 0 but did not produce all declared outputs. ` +
+            `Missing: ${missing.join(", ")}.`,
+        });
+        return;
+      }
 
       // Upload outputs to Convex storage.
       const outputStorageIds: string[] = [];
