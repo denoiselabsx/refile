@@ -252,6 +252,16 @@ export const patchExecution = internalMutation({
     outputFilenames: v.optional(v.array(v.string())),
     sandboxLogs: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    failureKind: v.optional(
+      v.union(
+        v.literal("complex"),
+        v.literal("noInput"),
+        v.literal("noOutput"),
+        v.literal("execError"),
+        v.literal("config"),
+        v.literal("aiError")
+      )
+    ),
     status: v.union(
       v.literal("running"),
       v.literal("completed"),

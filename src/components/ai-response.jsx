@@ -217,41 +217,97 @@ export function AIResponse({ prompt }) {
           </div>
         )}
 
-      {/* ── Failure: friendly, no logs/command leaked ── */}
-      {isFailed && (
-        <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">
-          <p className="flex items-center gap-1.5 font-medium text-foreground">
-            <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-            Let&apos;s try that a different way
-          </p>
-          <p className="mt-1">
-            That request was a bit much to do in one shot. Two things that
-            almost always work:
-          </p>
-          <ul className="mt-1.5 space-y-1">
-            <li className="flex gap-2">
-              <span className="text-foreground/60">1.</span>
-              <span>
-                Ask for <strong className="font-medium text-foreground">one
-                change at a time</strong> — e.g. &ldquo;make it black and
-                white&rdquo;, then &ldquo;now rotate it 180°&rdquo;, then
-                &ldquo;combine into a PDF&rdquo;. Each result feeds the next.
-              </span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-foreground/60">2.</span>
-              <span>
-                Describe the <strong className="font-medium text-foreground">
-                end result</strong> in plain words rather than how to do it.
-              </span>
-            </li>
-          </ul>
-          <p className="mt-2 text-[12px]">
-            This attempt wasn&apos;t counted toward your usage — retry as
-            many times as you like.
-          </p>
-        </div>
-      )}
+      {/* ── Failure: honest, specific copy per failureKind. NEVER leak
+           logs/commands. The old "too much in one shot" text is ONLY for
+           genuinely-complex requests — every other failure says what's
+           actually wrong so the user isn't sent in circles. ── */}
+      {isFailed && <FailureCard failureKind={prompt.failureKind} />}
+    </div>
+  );
+}
+
+/**
+ * Failure presentation, keyed off the coarse failureKind the backend set.
+ * Each branch tells the user what actually went wrong and what to do next —
+ * the previous single card claimed every failure was "too much in one shot",
+ * which sent users (e.g. "convert to png" with no file uploaded) in circles.
+ * No logs, commands, or tool names ever appear here.
+ */
+function FailureCard({ failureKind }) {
+  // Genuinely-complex requests: keep the original, correct guidance.
+  if (failureKind === "complex" || !failureKind) {
+    return (
+      <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">
+        <p className="flex items-center gap-1.5 font-medium text-foreground">
+          <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+          Let&apos;s try that a different way
+        </p>
+        <p className="mt-1">
+          That request was a bit much to do in one shot. Two things that
+          almost always work:
+        </p>
+        <ul className="mt-1.5 space-y-1">
+          <li className="flex gap-2">
+            <span className="text-foreground/60">1.</span>
+            <span>
+              Ask for <strong className="font-medium text-foreground">one
+              change at a time</strong> — e.g. &ldquo;make it black and
+              white&rdquo;, then &ldquo;now rotate it 180°&rdquo;, then
+              &ldquo;combine into a PDF&rdquo;. Each result feeds the next.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-foreground/60">2.</span>
+            <span>
+              Describe the <strong className="font-medium text-foreground">
+              end result</strong> in plain words rather than how to do it.
+            </span>
+          </li>
+        </ul>
+        <p className="mt-2 text-[12px]">
+          This attempt wasn&apos;t counted toward your usage — retry as
+          many times as you like.
+        </p>
+      </div>
+    );
+  }
+
+  const COPY = {
+    noInput: {
+      title: "Upload a file first",
+      body: "I don't have a file to work on yet. Use Upload files on the left, then tell me what you'd like done with it.",
+    },
+    noOutput: {
+      title: "That didn't produce a result",
+      body: "I tried, but nothing came out the other end. Double-check the file is the kind you described, then give it another go — or try phrasing the request a little differently.",
+    },
+    execError: {
+      title: "Something went wrong with that file",
+      body: "That didn't work on this particular file — it may be corrupt, an unexpected format, or password-protected. Try a different file, or describe what you want a little differently.",
+    },
+    config: {
+      title: "We hit a snag on our end",
+      body: "This one is on us, not you — the service had a temporary problem. Please try again in a moment; if it keeps happening, contact support.",
+    },
+    aiError: {
+      title: "I couldn't read that request",
+      body: "I had trouble understanding what you wanted. Try describing the end result in plain words — e.g. \"convert this to PNG\" or \"compress this PDF\".",
+    },
+  };
+
+  const { title, body } = COPY[failureKind] ?? COPY.aiError;
+
+  return (
+    <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">
+      <p className="flex items-center gap-1.5 font-medium text-foreground">
+        <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+        {title}
+      </p>
+      <p className="mt-1">{body}</p>
+      <p className="mt-2 text-[12px]">
+        This attempt wasn&apos;t counted toward your usage — retry as many
+        times as you like.
+      </p>
     </div>
   );
 }

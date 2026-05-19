@@ -982,6 +982,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
+        failureKind: "config",
         errorMessage: "GROQ_API_KEY is not set on the Convex deployment.",
       });
       return;
@@ -996,6 +997,26 @@ export const runJob = internalAction({
         beforeTurnIndex: promptDoc.turnIndex,
         limit: 5,
       });
+    }
+
+    // Hard precondition: a file operation needs a file. submit() auto-chains
+    // the previous turn's outputs when no new upload is given, so by the time
+    // we're here an empty inputFilenames means there is genuinely nothing to
+    // work on — not in this turn, not from any prior turn. Asking the model
+    // anyway risks it picking command mode and dead-ending the user on the
+    // generic failure card (exactly the "convert to png" loop with zero
+    // uploaded files). Short-circuit to a clear, friendly chat reply.
+    if (promptDoc.inputFilenames.length === 0) {
+      await ctx.runMutation(internal.prompts.patchAiResponse, {
+        promptId,
+        aiKind: "chat",
+        aiMessage:
+          "I'd love to — but I don't have a file to work on yet. " +
+          "Upload one (use **Upload files** on the left), then tell me " +
+          "what you'd like done with it.",
+        status: "completed",
+      });
+      return;
     }
 
     const historyBlock = priorTurns.length
@@ -1072,6 +1093,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
+        failureKind: "aiError",
         errorMessage: `AI command generation failed: ${err instanceof Error ? err.message : String(err)}`,
       });
       return;
@@ -1113,6 +1135,7 @@ export const runJob = internalAction({
         await ctx.runMutation(internal.prompts.patchExecution, {
           promptId,
           status: "failed",
+          failureKind: "config",
           errorMessage:
             "Modal worker not configured. Set MODAL_WORKER_URL on the Convex deployment (see /modal/README.md).",
         });
@@ -1212,6 +1235,7 @@ export const runJob = internalAction({
           await ctx.runMutation(internal.prompts.patchExecution, {
             promptId,
             status: "failed",
+            failureKind: "execError",
             errorMessage: `Missing input ${promptDoc.inputStorageIds[i]}`,
           });
           return;
@@ -1290,6 +1314,7 @@ export const runJob = internalAction({
           await ctx.runMutation(internal.prompts.patchExecution, {
             promptId,
             status: "failed",
+            failureKind: "execError",
             sandboxLogs:
               err instanceof StepError ? err.logs.slice(-8000) : undefined,
             errorMessage:
@@ -1316,6 +1341,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: succeeded ? "completed" : "failed",
+        failureKind: succeeded ? undefined : "noOutput",
         outputStorageIds: outputStorageIds as any,
         outputFilenames,
         errorMessage: succeeded
@@ -1341,6 +1367,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
+        failureKind: "complex",
         errorMessage:
           "AI chose command mode but didn't return a runnable command + output filenames.",
       });
@@ -1399,6 +1426,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
+        failureKind: "config",
         errorMessage:
           "Modal worker not configured. Set MODAL_WORKER_URL on the Convex deployment (see /modal/README.md).",
       });
@@ -1439,6 +1467,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: succeeded ? "completed" : "failed",
+        failureKind: succeeded ? undefined : "noOutput",
         outputStorageIds: outputStorageIds as any,
         outputFilenames,
         sandboxLogs: logs.slice(-8000),
@@ -1463,6 +1492,7 @@ export const runJob = internalAction({
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
+        failureKind: "execError",
         sandboxLogs:
           err instanceof StepError ? err.logs.slice(-8000) : undefined,
         errorMessage: err instanceof Error ? err.message : String(err),

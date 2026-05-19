@@ -145,6 +145,21 @@ export default defineSchema({
     outputFilenames: v.optional(v.array(v.string())),
     sandboxLogs: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    // Coarse failure category, set alongside status:"failed". Drives the
+    // user-facing copy so a missing-file or infra error is NOT mislabeled
+    // as "you asked for too much". errorMessage stays internal (logs/admin);
+    // failureKind is the only failure signal the browser is allowed to act
+    // on. "complex" = genuinely too much in one shot (the old default).
+    failureKind: v.optional(
+      v.union(
+        v.literal("complex"), // request too complex / plan rejected
+        v.literal("noInput"), // no file uploaded for a file operation
+        v.literal("noOutput"), // command ran but produced nothing
+        v.literal("execError"), // tool errored at runtime
+        v.literal("config"), // server misconfig (no key / worker)
+        v.literal("aiError") // AI generation itself failed
+      )
+    ),
     // Multi-tool pipeline (kind="pipeline"). One entry per step, in order.
     // The whole array is rewritten on each step transition (≤6 entries).
     // Only the LAST step's outputs become outputStorageIds; intermediates
