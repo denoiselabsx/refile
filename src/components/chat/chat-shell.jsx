@@ -1008,9 +1008,16 @@ export function ChatShell({ chatId = null }) {
                     : "Ask anything, reference files with @filename…"
                 }
               />
-              <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">
-                ReFile is an AI and can make mistakes. Check important results.
-              </p>
+              <div className="mt-2 hidden items-center justify-center gap-2 text-[11px] text-muted-foreground sm:flex">
+                <span>ReFile is an AI and can make mistakes.</span>
+                <span aria-hidden="true">·</span>
+                <Link
+                  href="/security"
+                  className="inline-flex items-center gap-1 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                >
+                  Files auto-delete in 24h
+                </Link>
+              </div>
             </div>
           </div>
         </div>
