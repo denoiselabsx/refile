@@ -79,11 +79,11 @@ export function TopBar() {
           <Link
             href="/"
             aria-label={`${BRAND.name} home`}
-            className="group flex items-center gap-2 pl-2 pr-3 transition-opacity"
+            className="group flex shrink-0 items-center gap-2 whitespace-nowrap pl-2 pr-2 transition-opacity"
           >
             <LogoMark
               size={22}
-              className="transition-transform group-hover:rotate-[-6deg]"
+              className="shrink-0 transition-transform group-hover:rotate-[-6deg]"
             />
             <span className="text-[14.5px] font-semibold tracking-tight">
               {BRAND.name}
@@ -96,7 +96,7 @@ export function TopBar() {
           {/* Desktop nav */}
           <nav
             ref={navRef}
-            className="relative hidden items-center gap-0.5 md:flex"
+            className="relative hidden min-w-0 items-center gap-0 md:flex"
             onMouseLeave={() => setHovered(null)}
           >
             {MARKETING_NAV.map((item) => {
@@ -108,7 +108,7 @@ export function TopBar() {
                   href={item.href}
                   onMouseEnter={() => setHovered(item.href)}
                   className={cn(
-                    "relative z-10 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                    "relative z-10 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[13px] font-medium transition-colors lg:px-3.5",
                     active
                       ? "text-foreground"
                       : "text-muted-foreground hover:text-foreground"
