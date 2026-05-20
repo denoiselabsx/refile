@@ -4,23 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import {
-  MessageSquare,
-  Layers,
-  Settings,
-  LogOut,
-  Moon,
-  Sun,
-  Plus,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { LogOut, Moon, Sun, Plus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogoMark } from "@/components/brand/logo";
 import { useAuth } from "@/contexts/auth-context";
@@ -69,7 +53,7 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
             </span>
           </Link>
 
-          {[...APP_NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
+          {APP_NAV.map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.href);
             return (
@@ -110,80 +94,56 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
             </div>
           )}
 
-          <button
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            aria-label="Toggle theme"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97] group-hover:w-full group-hover:justify-start group-hover:px-3"
-          >
-            {mounted ? (
-              isDark ? (
-                <Sun className="size-4 shrink-0" />
-              ) : (
-                <Moon className="size-4 shrink-0" />
-              )
-            ) : (
-              <span className="size-4 shrink-0" />
-            )}
-            <span className="ml-2 hidden whitespace-nowrap text-[12.5px] group-hover:inline">
-              {isDark ? "Light mode" : "Dark mode"}
-            </span>
-          </button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-muted active:scale-[0.97] group-hover:w-full group-hover:justify-start group-hover:px-2"
-                aria-label="Account menu"
-              >
-                <Avatar className="size-7 shrink-0">
-                  <AvatarImage src={user?.picture} alt={user?.name || "Account"} />
-                  <AvatarFallback className="text-[11px]">{initials}</AvatarFallback>
-                </Avatar>
-                <span className="ml-2 hidden min-w-0 flex-1 truncate text-left text-[12.5px] font-medium group-hover:inline">
+          {/* Collapsed: avatar only (clicks → /settings). Expanded: avatar +
+              name/email on the left, theme + sign-out icons on the right. */}
+          <div className="flex items-center gap-1">
+            <Link
+              href="/settings"
+              aria-label="Account settings"
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted active:scale-[0.97]",
+                "group-hover:w-auto group-hover:flex-1 group-hover:justify-start group-hover:px-2",
+                isActive(pathname, "/settings") && "bg-muted"
+              )}
+            >
+              <Avatar className="size-7 shrink-0">
+                <AvatarImage src={user?.picture} alt={user?.name || "Account"} />
+                <AvatarFallback className="text-[11px]">{initials}</AvatarFallback>
+              </Avatar>
+              <span className="ml-2 hidden min-w-0 flex-1 flex-col text-left group-hover:flex">
+                <span className="truncate text-[12.5px] font-medium leading-tight">
                   {user?.name || "Account"}
                 </span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              sideOffset={8}
-              className="w-56"
+                {user?.email && (
+                  <span className="truncate text-[10.5px] leading-tight text-muted-foreground">
+                    {user.email}
+                  </span>
+                )}
+              </span>
+            </Link>
+
+            <button
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              title={isDark ? "Light mode" : "Dark mode"}
+              className="hidden size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97] group-hover:inline-flex"
             >
-              {user && (
-                <>
-                  <DropdownMenuLabel className="normal-case tracking-normal text-foreground">
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-medium">{user.name}</span>
-                      <span className="text-[11.5px] font-normal text-muted-foreground">
-                        {user.email}
-                      </span>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                </>
+              {mounted ? (
+                isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />
+              ) : (
+                <span className="size-3.5" />
               )}
-              {APP_NAV.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <DropdownMenuItem key={item.href} asChild>
-                    <Link href={item.href}>
-                      <Icon className="size-3.5" /> {item.label}
-                    </Link>
-                  </DropdownMenuItem>
-                );
-              })}
-              <DropdownMenuItem asChild>
-                <Link href="/settings">
-                  <Settings className="size-3.5" /> Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-                <LogOut className="size-3.5" /> Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </button>
+
+            <button
+              onClick={logout}
+              aria-label="Sign out"
+              title="Sign out"
+              className="hidden size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] group-hover:inline-flex"
+            >
+              <LogOut className="size-3.5" />
+            </button>
+          </div>
         </div>
       </aside>
   );
