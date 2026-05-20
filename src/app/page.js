@@ -26,6 +26,7 @@ import { DemoVideo } from "@/components/demo-video";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
+import { APP_VERSION } from "@/lib/site";
 
 const FEATURES = [
   {
@@ -196,7 +197,7 @@ export default function Home() {
               </span>
               <span className="text-[11.5px] text-muted-foreground opacity-50">·</span>
               <span className="text-[11.5px] font-medium tracking-tight">
-                v0.1
+                {APP_VERSION}
               </span>
             </div>
           </motion.div>

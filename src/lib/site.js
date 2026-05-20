@@ -4,9 +4,19 @@
  *
  * Set NEXT_PUBLIC_APP_URL on Vercel to the canonical domain.
  */
+import pkg from "../../package.json";
+
 export const SITE_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://refile.denoiselabs.com"
 ).replace(/\/$/, "");
+
+/**
+ * Current product version, sourced from package.json so the landing
+ * pill, footer, and any "What's new" banner can never drift apart.
+ * Bumping package.json's version is the single point of update —
+ * which `npm version <type>` does for us at release time.
+ */
+export const APP_VERSION = `v${pkg.version}`;
 
 export const SITE = {
   name: "ReFile",
