@@ -1,4 +1,5 @@
-import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
@@ -93,5 +94,58 @@ export const claimAdmin = mutation({
 
     await ctx.db.insert("userRoles", { userId, role: "admin" });
     return { role: "admin" as const, changed: true };
+  },
+});
+
+/**
+ * Bootstrap helper — promote an allowlisted user to admin by email without
+ * requiring that account to be signed in. Gated by the same allowlist as
+ * claimAdmin so it can't be used to escalate an arbitrary account.
+ *
+ * Intended to be called once from the Convex dashboard for the founding
+ * account so the role row exists before that user first signs in. Safe to
+ * re-run: idempotent.
+ *
+ * `internalMutation` (not `mutation`) so it isn't part of the public API
+ * surface — only callable from the Convex dashboard or another Convex
+ * function. The allowlist check stays as defense-in-depth.
+ */
+export const grantAdminByEmail = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized || !adminAllowlist().includes(normalized)) {
+      throw new Error(`${email} is not on the admin allowlist.`);
+    }
+
+    // No index on users.email — the auth tables ship without one — so we
+    // filter. This runs interactively, exactly once per email, so the
+    // table scan is acceptable.
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), normalized))
+      .first();
+
+    if (!user) {
+      throw new Error(
+        `No user with email ${email} has signed in yet — they must complete a first sign-in before being promoted.`
+      );
+    }
+
+    const existing = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (existing) {
+      if (existing.role !== "admin") {
+        await ctx.db.patch(existing._id, { role: "admin" });
+        return { userId: user._id, changed: true };
+      }
+      return { userId: user._id, changed: false };
+    }
+
+    await ctx.db.insert("userRoles", { userId: user._id, role: "admin" });
+    return { userId: user._id, changed: true };
   },
 });
