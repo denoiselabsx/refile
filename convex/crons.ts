@@ -17,4 +17,13 @@ crons.interval(
   internal.reviewFailures.reviewFailures
 );
 
+// Analytics rollup. Computes yesterday's per-event counters into
+// eventDailyRollup so the admin dashboard can chart long ranges without
+// scanning the raw events table, and prunes raw rows past retention.
+crons.daily(
+  "analytics rollup",
+  { hourUTC: 0, minuteUTC: 30 },
+  internal.events.rollupYesterday
+);
+
 export default crons;

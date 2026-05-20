@@ -182,6 +182,31 @@ export const submit = mutation({
     // Bump the chat's lastActivity so it sorts to the top.
     await ctx.db.patch(chatId, { lastActivity: Date.now() });
 
+    // Analytics: conversion started. Also flag follow_up_used when this
+    // turn auto-chained (no new uploads + reused previous outputs) — that
+    // signals genuine conversational refinement, distinct from the first
+    // turn of a chat.
+    const isFollowUp =
+      args.inputStorageIds.length === 0 && inputStorageIds.length > 0;
+    await ctx.runMutation(internal.events.logInternal, {
+      userId,
+      name: "conversion_started",
+      props: {
+        promptId,
+        chatId,
+        turnIndex,
+        fileCount: inputStorageIds.length,
+        source: "ui",
+      },
+    });
+    if (isFollowUp) {
+      await ctx.runMutation(internal.events.logInternal, {
+        userId,
+        name: "follow_up_used",
+        props: { promptId, chatId, turnIndex },
+      });
+    }
+
     // Schedule the action (runs out-of-band, immediately)
     await ctx.scheduler.runAfter(0, internal.runJob.runJob, { promptId });
 
@@ -447,10 +472,13 @@ export const patchAiResponse = internalMutation({
     await ctx.db.patch(promptId, patch);
     const nextStatus = patch.status ?? prev?.status;
     const isTerminal = nextStatus === "completed" || nextStatus === "failed";
-    if (!wasTerminal && isTerminal && prev?.webhookUrl) {
-      await ctx.scheduler.runAfter(0, internal.webhooks.deliverJobWebhook, {
-        promptId,
-      });
+    if (!wasTerminal && isTerminal) {
+      if (prev?.webhookUrl) {
+        await ctx.scheduler.runAfter(0, internal.webhooks.deliverJobWebhook, {
+          promptId,
+        });
+      }
+      await fireTerminalEvent(ctx, promptId, nextStatus);
     }
   },
 });
@@ -512,10 +540,48 @@ export const patchExecution = internalMutation({
       prev?.status === "completed" || prev?.status === "failed";
     await ctx.db.patch(promptId, patch);
     const isTerminal = patch.status === "completed" || patch.status === "failed";
-    if (!wasTerminal && isTerminal && prev?.webhookUrl) {
-      await ctx.scheduler.runAfter(0, internal.webhooks.deliverJobWebhook, {
-        promptId,
-      });
+    if (!wasTerminal && isTerminal) {
+      if (prev?.webhookUrl) {
+        await ctx.scheduler.runAfter(0, internal.webhooks.deliverJobWebhook, {
+          promptId,
+        });
+      }
+      await fireTerminalEvent(ctx, promptId, patch.status);
     }
   },
 });
+
+// Shared analytics fire-once helper for the two patch* paths above. Reads
+// the just-patched row so failureKind / source are accurate. We pass status
+// explicitly because patchAiResponse may not include it in the patch arg.
+async function fireTerminalEvent(
+  ctx: any,
+  promptId: any,
+  status: "completed" | "failed" | "pending" | "generating" | "running"
+) {
+  const row = await ctx.db.get(promptId);
+  if (!row) return;
+  if (status === "completed") {
+    await ctx.runMutation(internal.events.logInternal, {
+      userId: row.userId,
+      name: "conversion_completed",
+      props: {
+        promptId,
+        source: row.source ?? "ui",
+        tool: row.aiTool,
+        kind: row.aiKind,
+      },
+    });
+  } else if (status === "failed") {
+    await ctx.runMutation(internal.events.logInternal, {
+      userId: row.userId,
+      name: "conversion_failed",
+      props: {
+        promptId,
+        source: row.source ?? "ui",
+        tool: row.aiTool,
+        failureKind: row.failureKind ?? "complex",
+      },
+    });
+  }
+}

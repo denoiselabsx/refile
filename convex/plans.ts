@@ -126,6 +126,13 @@ export async function assertWithinQuota(
   // metered overage (allowed here, billed at payout).
   if (usage.conversions >= plan.includedConversions) {
     if (plan.overagePerConversion == null) {
+      // Analytics: the upgrade-pressure moment. Fired before the throw so a
+      // failed run doesn't suppress the signal.
+      await ctx.runMutation(internal.events.logInternal, {
+        userId,
+        name: "daily_limit_hit",
+        props: { planId, included: plan.includedConversions },
+      });
       throw new Error(
         `[[UPGRADE:conversions:${planId}]] You've used all ` +
           `${plan.includedConversions} free conversions this month. ` +

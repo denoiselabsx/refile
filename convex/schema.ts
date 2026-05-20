@@ -270,4 +270,33 @@ export default defineSchema({
     hasPaymentMethod: v.boolean(),
     paymentMethodCheckedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // Raw analytics events. One row per fired event. Written by client
+  // mutations (UI clicks, page views) and internal mutations (server-side
+  // job lifecycle in runJob). Reads happen via the admin dashboard only.
+  //
+  // For ad-hoc exploration we keep raw rows ~30 days, then prune via cron.
+  // For historical dashboards we lean on eventDailyRollup so a 30-day chart
+  // doesn't scan every event.
+  events: defineTable({
+    userId: v.optional(v.id("users")),    // absent = anonymous visitor
+    anonId: v.optional(v.string()),       // client-generated UUID, kept in localStorage
+    name: v.string(),                     // canonical event name (see lib/analytics-events.js)
+    props: v.optional(v.any()),           // freeform JSON, validated by name at read time
+    at: v.number(),                       // Date.now()
+    day: v.string(),                      // UTC "YYYY-MM-DD", indexed for rollup + day filters
+  })
+    .index("by_name_day", ["name", "day"])
+    .index("by_user_recent", ["userId", "at"])
+    .index("by_day", ["day"]),
+
+  // Pre-computed daily counters. Written by the analyticsRollup cron at
+  // ~00:30 UTC for the previous day. The admin dashboard reads this for
+  // any "last N days" chart so it never scans the raw events table.
+  eventDailyRollup: defineTable({
+    day: v.string(),                      // "YYYY-MM-DD" UTC
+    name: v.string(),                     // canonical event name
+    count: v.number(),                    // total occurrences that day
+    uniqueUsers: v.number(),              // distinct userId|anonId values
+  }).index("by_day_name", ["day", "name"]),
 });

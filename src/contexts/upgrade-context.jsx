@@ -11,6 +11,7 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { parseUpgradeError, upgradeOffer } from "../../lib/upgrade.js";
+import { track } from "@/lib/analytics";
 
 const UpgradeContext = createContext({
   /** Pass a caught error. Returns true if it was an upgrade wall (modal
@@ -101,7 +102,14 @@ export function UpgradeProvider({ children }) {
             <div className="mt-3 border-t border-border bg-muted/30 px-6 py-5">
               <Link
                 href={checkoutHref}
-                onClick={() => setOffer(null)}
+                onClick={() => {
+                  track("upgrade_clicked", {
+                    to: offer.targetPlanId,
+                    kind: offer.kind,
+                    surface: "upgrade_modal",
+                  });
+                  setOffer(null);
+                }}
                 className="cta-shimmer flex w-full items-center justify-center gap-2 rounded-xl bg-foreground px-4 py-3 text-[14px] font-semibold text-background transition-opacity hover:opacity-90"
               >
                 Upgrade to {offer.targetPlanName} · $
