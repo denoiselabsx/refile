@@ -165,7 +165,16 @@ export default function PresetsListPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-5 sm:py-14">
+      {/* AppShell in "app" mode (auto + signed-in) wraps the body in a
+          fixed-viewport `h-[100dvh] overflow-hidden` so the chat
+          workspace can manage its own scroll. Content pages like
+          /presets need to scroll the page itself, so we add the
+          scroll container here. `h-full overflow-y-auto` is the same
+          pattern /settings uses. Guests get marketing mode where the
+          document scrolls naturally — this div behaves fine there too,
+          it just doesn't gain a separate scrollbar. */}
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-5 sm:py-14">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -347,6 +356,7 @@ export default function PresetsListPage() {
               ))}
             </div>
           )}
+        </div>
         </div>
       </div>
     </AppShell>
