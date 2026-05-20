@@ -5,6 +5,7 @@ export const ERROR_CODES = Object.freeze({
   invalid_request: "invalid_request",
   not_found: "not_found",
   quota_exceeded: "quota_exceeded",
+  payment_required: "payment_required",
   rate_limited: "rate_limited",
   unprocessable_request: "unprocessable_request",
   no_output: "no_output",

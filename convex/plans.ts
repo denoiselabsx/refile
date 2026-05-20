@@ -5,6 +5,7 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
@@ -17,6 +18,13 @@ import {
   modalCost,
   computeOverage,
 } from "../lib/plans.js";
+
+// API free-tier caps. Smaller than the web Free plan so heavy users
+// don't ride the API trial indefinitely. Once a payment method is on
+// file, plan-level limits (assertWithinQuota) take over.
+export const API_FREE_TRIAL_JOBS = 20;
+export const API_FREE_MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const API_FREE_MAX_FILES = 1;
 
 /** Current month bucket key, UTC, e.g. "2026-05". Must match metering. */
 export function monthKey(date = new Date()): string {
@@ -466,5 +474,220 @@ export const markPromptBilled = internalMutation({
   args: { promptId: v.id("prompts") },
   handler: async (ctx, { promptId }) => {
     await ctx.db.patch(promptId, { billedToPolar: true });
+  },
+});
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  API gate (lifetime free trial + payment-method check)
+ *
+ *  Gates apply ONLY to `source: "api"` submissions. The browser/UI is
+ *  unaffected — its quota path remains assertWithinQuota.
+ *
+ *  Flow:
+ *    1. submitForUser  → assertApiAllowed → assertWithinQuota
+ *    2. runJob success → recordApiJobSuccess (increments lifetime counter)
+ *    3. Polar webhook  → refreshPaymentMethodForUser → scheduler runs
+ *                        the internalAction in plansActions.ts which
+ *                        writes back via _setPaymentMethodCache.
+ * ──────────────────────────────────────────────────────────────── */
+
+async function getApiUsage(
+  ctx: MutationCtx | QueryCtx,
+  userId: Id<"users">
+): Promise<{
+  totalJobs: number;
+  hasPaymentMethod: boolean;
+  paymentMethodCheckedAt: number;
+}> {
+  const row = await ctx.db
+    .query("apiUsage")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  return row
+    ? {
+        totalJobs: row.totalJobs,
+        hasPaymentMethod: row.hasPaymentMethod,
+        paymentMethodCheckedAt: row.paymentMethodCheckedAt,
+      }
+    : { totalJobs: 0, hasPaymentMethod: false, paymentMethodCheckedAt: 0 };
+}
+
+async function hasPaymentMethodOnFile(
+  ctx: MutationCtx | QueryCtx,
+  userId: Id<"users">
+): Promise<boolean> {
+  // Existing paid users always pass — having an active Polar subscription
+  // means a card is on file by definition.
+  const planRow = await ctx.db
+    .query("userPlans")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  if (planRow?.polarSubscriptionStatus === "active") return true;
+  // Otherwise read the cached apiUsage flag, refreshed by the Polar webhook
+  // and the periodic refresh action.
+  const usage = await getApiUsage(ctx, userId);
+  return usage.hasPaymentMethod;
+}
+
+/**
+ * API gate. Runs BEFORE assertWithinQuota for source="api" submissions.
+ * Throws with a [[PAYMENT:...]] tag so the route layer can map it to a
+ * 402 payment_required response. Plan-level limits still apply after
+ * this passes (assertWithinQuota is called separately).
+ */
+export async function assertApiAllowed(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  fileCount: number,
+  totalBytes: number
+) {
+  const hasCard = await hasPaymentMethodOnFile(ctx, userId);
+
+  if (!hasCard) {
+    if (fileCount > API_FREE_MAX_FILES) {
+      throw new Error(
+        `[[PAYMENT:free_limit:filecount]] API free trial allows ` +
+          `${API_FREE_MAX_FILES} file per job. Add a payment method at ` +
+          `/settings/api to send multi-file jobs.`
+      );
+    }
+    if (totalBytes > API_FREE_MAX_FILE_BYTES) {
+      const capMb = Math.round(API_FREE_MAX_FILE_BYTES / (1024 * 1024));
+      throw new Error(
+        `[[PAYMENT:free_limit:filesize]] API free trial caps files at ` +
+          `${capMb} MB. Add a payment method at /settings/api for larger files.`
+      );
+    }
+    const usage = await getApiUsage(ctx, userId);
+    if (usage.totalJobs >= API_FREE_TRIAL_JOBS) {
+      throw new Error(
+        `[[PAYMENT:trial:exhausted]] API free trial used ` +
+          `(${API_FREE_TRIAL_JOBS} jobs). Add a payment method at ` +
+          `/settings/api to continue.`
+      );
+    }
+  }
+}
+
+/** Internal metering for API jobs. Lifetime counter, monotonically
+ * increasing. Same conversions dimension as billing — a 3-step pipeline
+ * burns 3 trial slots. */
+export const recordApiJobSuccess = internalMutation({
+  args: {
+    userId: v.id("users"),
+    conversions: v.number(),
+  },
+  handler: async (ctx, { userId, conversions }) => {
+    const existing = await ctx.db
+      .query("apiUsage")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        totalJobs: existing.totalJobs + conversions,
+      });
+    } else {
+      await ctx.db.insert("apiUsage", {
+        userId,
+        totalJobs: conversions,
+        hasPaymentMethod: false,
+        paymentMethodCheckedAt: 0,
+      });
+    }
+  },
+});
+
+/** Dashboard data source: lifetime API job count + free limit + whether
+ * a payment method is on file. */
+export const myApiUsage = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const usage = await getApiUsage(ctx, userId);
+    const hasCard = await hasPaymentMethodOnFile(ctx, userId);
+    return {
+      totalJobs: usage.totalJobs,
+      freeLimit: API_FREE_TRIAL_JOBS,
+      hasPaymentMethod: hasCard,
+      paymentMethodCheckedAt: usage.paymentMethodCheckedAt,
+    };
+  },
+});
+
+/** Resolve the user's Polar customer id (or null). Used by the refresh
+ * action in plansActions.ts. Internal-only. */
+export const _polarCustomerForUser = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const row = await ctx.db
+      .query("userPlans")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    return row?.polarCustomerId ?? null;
+  },
+});
+
+/** Write the payment-method cache. Called by the refresh action after a
+ * Polar customer lookup. Upserts the apiUsage row so the cached flag is
+ * available to assertApiAllowed without a fresh SDK call on every submit. */
+export const _setPaymentMethodCache = internalMutation({
+  args: {
+    userId: v.id("users"),
+    hasPaymentMethod: v.boolean(),
+  },
+  handler: async (ctx, { userId, hasPaymentMethod }) => {
+    const existing = await ctx.db
+      .query("apiUsage")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    const now = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        hasPaymentMethod,
+        paymentMethodCheckedAt: now,
+      });
+    } else {
+      await ctx.db.insert("apiUsage", {
+        userId,
+        totalJobs: 0,
+        hasPaymentMethod,
+        paymentMethodCheckedAt: now,
+      });
+    }
+  },
+});
+
+/** Dashboard-triggered refresh. Throttled to once per 60s to keep the
+ * Polar SDK from being hammered if the UI polls. */
+export const refreshMyPaymentMethod = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not signed in");
+    const usage = await getApiUsage(ctx, userId);
+    if (Date.now() - usage.paymentMethodCheckedAt < 60_000) return;
+    await ctx.scheduler.runAfter(
+      0,
+      internal.plansActions.refreshPaymentMethodStatus,
+      { userId }
+    );
+  },
+});
+
+/** Webhook-triggered refresh. Bridge-secret-guarded so only the Next.js
+ * Polar webhook (which holds the secret) can call it. */
+export const refreshPaymentMethodForUser = mutation({
+  args: {
+    secret: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { secret, userId }) => {
+    assertBridgeSecret(secret);
+    await ctx.scheduler.runAfter(
+      0,
+      internal.plansActions.refreshPaymentMethodStatus,
+      { userId }
+    );
   },
 });

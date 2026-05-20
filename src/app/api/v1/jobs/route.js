@@ -39,6 +39,18 @@ function isQuotaError(err) {
   return QUOTA_PATTERNS.some((p) => s.includes(p));
 }
 
+function isPaymentRequiredError(err) {
+  const s = String(err?.message ?? err ?? "");
+  return s.includes("[[PAYMENT:");
+}
+
+function stripPaymentTag(msg) {
+  // Remove the [[PAYMENT:...]] sentinel from the user-facing message so the
+  // 402 body reads cleanly. Internal tag stays in server logs (via the
+  // original error) for diagnostics.
+  return msg.replace(/\[\[PAYMENT:[^\]]+\]\]\s*/g, "").trim();
+}
+
 function extractOriginalMessage(err) {
   const s = String(err?.message ?? err ?? "");
   const m = s.match(/Uncaught Error:\s*(.+?)(?:\n|$)/);
@@ -126,6 +138,18 @@ export async function POST(request) {
       webhookUrl: webhook_url || undefined,
     });
   } catch (err) {
+    // payment_required wins over quota_exceeded — both can match (e.g. an
+    // API-free-trial user oversizing a file), but the actionable answer is
+    // "add a payment method" before "upgrade your plan".
+    if (isPaymentRequiredError(err)) {
+      return withCors(
+        errorResponse(
+          "payment_required",
+          stripPaymentTag(extractOriginalMessage(err)),
+          402
+        )
+      );
+    }
     if (isQuotaError(err)) {
       return withCors(errorResponse("quota_exceeded", extractOriginalMessage(err), 402));
     }

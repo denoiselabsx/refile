@@ -13,6 +13,8 @@ import {
   Check,
   Trash2,
   AlertTriangle,
+  CreditCard,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
@@ -301,6 +303,139 @@ function CreateDialog({ open, onOpenChange, onCreated }) {
   );
 }
 
+/**
+ * Free-trial / paid-mode card shown at the top of the API keys page.
+ *
+ * Two states based on `hasPaymentMethod`:
+ *   • No card: show a trial meter (X / Y jobs) with a prominent "Add a card"
+ *     CTA. Once the user crosses the free limit, the card tints amber and the
+ *     copy switches to "Free trial used. Add a payment method…" — same shape,
+ *     stronger signal.
+ *   • Card on file: a quiet "Payment method on file" card with a secondary
+ *     "Manage billing" link to the Polar Customer Portal.
+ *
+ * On mount we kick off a server-side payment-method refresh (throttled to
+ * 1/min on the server) so visiting this page picks up a freshly-added card
+ * without waiting for the next webhook.
+ */
+function ApiUsageCard() {
+  const usage = useQuery(api.plans.myApiUsage);
+  const customerId = useQuery(api.plans.myPolarCustomerId);
+  const refresh = useMutation(api.plans.refreshMyPaymentMethod);
+
+  useEffect(() => {
+    // Server throttles to 1/min so this is safe to fire on every mount.
+    refresh().catch(() => {});
+    // We intentionally only want this once on mount; the mutation reference
+    // is stable enough for our purposes and re-runs would be wasted work.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Loading skeleton — matches the surface idiom used elsewhere.
+  if (usage === undefined) {
+    return (
+      <div className="surface mb-6 px-4 py-3.5">
+        <div className="h-3.5 w-40 animate-pulse rounded bg-muted" />
+        <div className="mt-2 h-3 w-64 animate-pulse rounded bg-muted/70" />
+      </div>
+    );
+  }
+
+  // Signed out — the surrounding page already gates auth, so render nothing.
+  if (usage === null) return null;
+
+  const totalJobs = usage.totalJobs ?? 0;
+  const freeLimit = usage.freeLimit ?? 0;
+  const hasPaymentMethod = !!usage.hasPaymentMethod;
+
+  const portalHref = customerId
+    ? `/api/portal?customerId=${encodeURIComponent(customerId)}`
+    : "/pricing";
+
+  // ── Paid mode ────────────────────────────────────────────────────────
+  if (hasPaymentMethod) {
+    return (
+      <div className="surface mb-6 overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <CheckCircle2 className="size-4 shrink-0 text-success" />
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-medium text-foreground">
+                Payment method on file
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                Pay-as-you-go · Lifetime jobs: {totalJobs}
+              </p>
+            </div>
+          </div>
+          <a
+            href={portalHref}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            Manage billing
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Trial mode ───────────────────────────────────────────────────────
+  // Guard against a missing / zero freeLimit: if we can't compute a ratio
+  // safely, hide the bar and treat it as exhausted (the safer default — we
+  // never want to render a divide-by-zero or 0/0 progress bar).
+  const hasValidLimit = freeLimit > 0;
+  const exhausted = !hasValidLimit || totalJobs >= freeLimit;
+  const pct = hasValidLimit
+    ? Math.min(100, (totalJobs / freeLimit) * 100)
+    : 0;
+
+  return (
+    <div className="surface mb-6 overflow-hidden">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3 border-b px-4 py-3",
+          exhausted
+            ? "border-amber-500/30 bg-amber-500/5"
+            : "border-border/70"
+        )}
+      >
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[13.5px] font-medium text-foreground">
+            {exhausted && (
+              <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            )}
+            {exhausted ? "Free trial used" : "API free trial"}
+          </p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            {exhausted
+              ? "Add a payment method to keep using the API."
+              : hasValidLimit
+                ? `${totalJobs} of ${freeLimit} jobs used · 10 MB / 1 file per job`
+                : "10 MB / 1 file per job"}
+          </p>
+        </div>
+        <a
+          href={portalHref}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+        >
+          <CreditCard className="size-3.5" />
+          Add a card
+        </a>
+      </div>
+      {hasValidLimit && (
+        <div className="px-4 py-3">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-foreground/70 transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ApiKeysClient() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
@@ -366,6 +501,7 @@ export default function ApiKeysClient() {
       </div>
 
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <ApiUsageCard />
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="font-serif text-[30px] leading-tight tracking-tight text-foreground sm:text-[36px]">

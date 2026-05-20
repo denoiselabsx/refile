@@ -259,4 +259,15 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_keyHash", ["keyHash"]),
+
+  // Per-user API gate state. Separate from userUsage (per-month billing
+  // aggregation) because this is a lifetime + payment-method cache,
+  // written on every successful API job. Absence = new user (defaults
+  // to { totalJobs: 0, hasPaymentMethod: false }).
+  apiUsage: defineTable({
+    userId: v.id("users"),
+    totalJobs: v.number(),
+    hasPaymentMethod: v.boolean(),
+    paymentMethodCheckedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

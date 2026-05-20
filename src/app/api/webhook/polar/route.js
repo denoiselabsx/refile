@@ -81,6 +81,7 @@ async function syncSubscription(sub, { downgrade = false } = {}) {
       polarSubscriptionStatus: "canceled",
       polarCurrentPeriodEnd: s.periodEnd,
     });
+    await schedulePaymentMethodRefresh(s.externalId);
     return;
   }
 
@@ -117,6 +118,28 @@ async function syncSubscription(sub, { downgrade = false } = {}) {
     polarSubscriptionStatus: s.status,
     polarCurrentPeriodEnd: s.periodEnd,
   });
+  await schedulePaymentMethodRefresh(s.externalId);
+}
+
+/**
+ * Best-effort: ask Convex to re-fetch the user's Polar customer and update
+ * the `hasPaymentMethod` cache used by the API gate. Failure here must not
+ * fail the webhook (Polar will retry the whole webhook, which would
+ * re-apply the subscription too).
+ */
+async function schedulePaymentMethodRefresh(externalUserId) {
+  if (!externalUserId) return;
+  try {
+    await convexClient().mutation(api.plans.refreshPaymentMethodForUser, {
+      secret: process.env.POLAR_WEBHOOK_BRIDGE_SECRET,
+      userId: externalUserId,
+    });
+  } catch (err) {
+    console.error(
+      "[polar webhook] payment-method refresh schedule failed:",
+      err
+    );
+  }
 }
 
 export const POST = Webhooks({

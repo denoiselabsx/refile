@@ -265,6 +265,14 @@ async function meterSuccess(
     bytesProcessed,
     conversions,
   });
+  // API-source jobs additionally consume the lifetime free-trial counter.
+  // Same dimension as billing: a 3-step pipeline burns 3 trial slots.
+  if (promptDoc.source === "api") {
+    await ctx.runMutation(internal.plans.recordApiJobSuccess, {
+      userId: promptDoc.userId,
+      conversions,
+    });
+  }
   try {
     await ingestConversionToPolar(ctx, promptId, promptDoc.userId, conversions);
   } catch (err) {

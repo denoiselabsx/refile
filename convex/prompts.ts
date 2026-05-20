@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { assertWithinQuota } from "./plans";
+import { assertWithinQuota, assertApiAllowed } from "./plans";
 import { publicPrompt } from "../lib/sanitize.js";
 
 /* ──────────────────────────────────────────────────────────────── *
@@ -245,6 +245,16 @@ export const submitForUser = mutation({
         const meta = await ctx.db.system.get(sid);
         totalBytes += meta?.size ?? 0;
       }
+      // API gate runs first — payment_required wins over plan-level
+      // quota_exceeded when both could match (e.g. a 50MB file on a
+      // brand-new account would hit the API 10MB cap before the Free
+      // plan's larger cap).
+      await assertApiAllowed(
+        ctx,
+        userId,
+        inputStorageIds.length,
+        totalBytes
+      );
       await assertWithinQuota(
         ctx,
         userId,
