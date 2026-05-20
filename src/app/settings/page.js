@@ -12,13 +12,13 @@ import {
   Trash2,
   LogOut,
   ArrowRight,
-  ArrowLeft,
   Sun,
   Moon,
   Monitor,
   KeyRound,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { AppShell } from "@/components/shell/app-shell";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { isHiddenLaunchHref } from "@/lib/nav";
@@ -62,9 +62,11 @@ export default function SettingsPage() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-[13px] text-muted-foreground">
-        Loading…
-      </div>
+      <AppShell mode="app">
+        <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">
+          Loading…
+        </div>
+      </AppShell>
     );
   }
 
@@ -75,22 +77,10 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sticky top bar with back button — standalone page, no app sidebar */}
-      <div className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 sm:px-6">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Back
-          </Link>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-        <header className="mb-8">
+    <AppShell mode="app">
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+          <header className="mb-8">
           <h1 className="font-serif text-[30px] leading-tight tracking-tight text-foreground sm:text-[36px]">
             Settings
           </h1>
@@ -272,7 +262,8 @@ export default function SettingsPage() {
             </span>
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

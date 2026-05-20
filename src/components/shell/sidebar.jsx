@@ -26,16 +26,20 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
   const { user, logout } = useAuth();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  // Default collapsed. Once mounted, hydrate from localStorage so the user's
-  // last preference persists across navigations and reloads.
-  const [expanded, setExpanded] = useState(false);
+  // Read localStorage synchronously during initial render so the sidebar
+  // never flashes "collapsed" before snapping to the user's saved state.
+  // Safe on SSR — guarded by typeof window check.
+  const [expanded, setExpanded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     setMounted(true);
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "true") setExpanded(true);
-    } catch {}
   }, []);
 
   const toggle = () => {

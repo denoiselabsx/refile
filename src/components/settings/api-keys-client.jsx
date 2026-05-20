@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import {
-  ArrowLeft,
   ArrowRight,
   KeyRound,
   Plus,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
+import { AppShell } from "@/components/shell/app-shell";
 import { api } from "../../../convex/_generated/api";
 import { KEY_PREFIX_LEN } from "@/lib/api-auth";
 import { Button } from "@/components/ui/button";
@@ -461,47 +461,40 @@ export default function ApiKeysClient() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-[13px] text-muted-foreground">
-        Loading…
-      </div>
+      <AppShell mode="app">
+        <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">
+          Loading…
+        </div>
+      </AppShell>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto flex max-w-2xl flex-col items-start gap-4 px-4 py-16 sm:px-6">
-          <h1 className="font-serif text-[26px] tracking-tight text-foreground">
-            API keys
-          </h1>
-          <p className="text-[13px] text-muted-foreground">
-            Sign in to create and manage API keys for the REST API.
-          </p>
-          <Button onClick={() => router.push("/login/google")}>
-            Sign in
-            <ArrowRight className="size-3.5" />
-          </Button>
+      <AppShell mode="app">
+        <div className="h-full overflow-y-auto">
+          <div className="mx-auto flex max-w-2xl flex-col items-start gap-4 px-4 py-16 sm:px-6">
+            <h1 className="font-serif text-[26px] tracking-tight text-foreground">
+              API keys
+            </h1>
+            <p className="text-[13px] text-muted-foreground">
+              Sign in to create and manage API keys for the REST API.
+            </p>
+            <Button onClick={() => router.push("/login/google")}>
+              Sign in
+              <ArrowRight className="size-3.5" />
+            </Button>
+          </div>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 sm:px-6">
-          <Link
-            href="/settings"
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Settings
-          </Link>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-        <ApiUsageCard />
+    <AppShell mode="app">
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+          <ApiUsageCard />
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="font-serif text-[30px] leading-tight tracking-tight text-foreground sm:text-[36px]">
@@ -554,9 +547,10 @@ export default function ApiKeysClient() {
             ))}
           </div>
         )}
+        </div>
       </div>
 
       <CreateDialog open={createOpen} onOpenChange={setCreateOpen} />
-    </div>
+    </AppShell>
   );
 }

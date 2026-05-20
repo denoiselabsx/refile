@@ -18,6 +18,8 @@ import {
   Settings,
   Upload,
   Download,
+  PanelRightClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -64,6 +66,25 @@ export function ChatShell({ chatId = null }) {
   const [isBusy, setIsBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [uploadsOpen, setUploadsOpen] = useState(false);
+  const STORAGE_KEY = "refile.uploads.expanded";
+  const [uploadsExpanded, setUploadsExpanded] = useState(() => {
+    if (typeof window === "undefined") return true; // SSR safe; default true so signed-in users see files immediately
+    try {
+      return localStorage.getItem(STORAGE_KEY) !== "false"; // default true unless explicitly collapsed
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleUploads = () => {
+    setUploadsExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
   const [mounted, setMounted] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState("");
   const [uploads, setUploads] = useState([]);
@@ -140,6 +161,13 @@ export function ChatShell({ chatId = null }) {
   };
 
   const openUploads = () => {
+    const isDesktop =
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches;
+    if (isDesktop) {
+      if (!uploadsExpanded) toggleUploads();
+      return;
+    }
     setHistoryOpen(false);
     setUploadsOpen(true);
   };
@@ -537,7 +565,7 @@ export function ChatShell({ chatId = null }) {
 
   const uploadsPanel = (
     <>
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3 sm:px-4">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3 sm:px-4 lg:hidden">
         <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
           <Upload className="size-3.5" />
           Uploads
@@ -547,7 +575,6 @@ export function ChatShell({ chatId = null }) {
           variant="ghost"
           onClick={() => setUploadsOpen(false)}
           aria-label="Close uploads"
-          className="lg:hidden"
         >
           <X className="size-3.5" />
         </Button>
@@ -703,9 +730,62 @@ export function ChatShell({ chatId = null }) {
       appSidebarNavExtra={appSidebarExtra}
       appSidebarFooterExtra={appSidebarUsage}
     >
-      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 lg:grid-cols-[300px_1fr]">
-        <aside className="hidden h-full min-h-0 flex-col border-r border-border lg:flex">
-          {uploadsPanel}
+      <div
+        className={cn(
+          "grid h-full min-h-0 grid-cols-1 grid-rows-1 transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          uploadsExpanded
+            ? "lg:grid-cols-[300px_1fr]"
+            : "lg:grid-cols-[44px_1fr]",
+        )}
+      >
+        <aside
+          className={cn(
+            "hidden h-full min-h-0 flex-col border-r border-border lg:flex",
+            !uploadsExpanded && "overflow-hidden",
+          )}
+        >
+          {uploadsExpanded ? (
+            <>
+              <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/70 px-3">
+                <span className="text-[12px] font-medium text-muted-foreground">
+                  Uploads
+                  {uploads.length + uploading.length > 0 && (
+                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] tabular-nums text-foreground">
+                      {uploads.length + uploading.length}
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={toggleUploads}
+                  aria-label="Collapse uploads"
+                  title="Collapse uploads"
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <PanelRightClose className="size-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {uploadsPanel}
+              </div>
+            </>
+          ) : (
+            <button
+              onClick={toggleUploads}
+              aria-label="Expand uploads"
+              title="Expand uploads"
+              className="group flex h-full w-full flex-col items-center justify-start gap-3 py-4 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            >
+              <PanelLeftOpen className="size-4" />
+              {uploads.length + uploading.length > 0 && (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-medium tabular-nums text-background">
+                  {uploads.length + uploading.length}
+                </span>
+              )}
+              <span className="text-[10.5px] font-medium uppercase tracking-wider [writing-mode:vertical-rl] [transform:rotate(180deg)]">
+                Uploads
+              </span>
+            </button>
+          )}
         </aside>
 
         {/* Mobile history drawer */}
