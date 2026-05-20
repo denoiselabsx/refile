@@ -108,8 +108,14 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
       )}
 
       <nav
+        // `min-h-0` is the load-bearing class here. Without it, a
+        // `flex-1` child of a flex column defaults to `min-height: auto`
+        // — meaning it grows to its content's intrinsic size and never
+        // lets an inner `overflow-y-auto` actually scroll. With it, the
+        // nav respects the parent height, and the chat-history scroller
+        // inside `navExtraContent` finally has somewhere to clip.
         className={cn(
-          "flex flex-1 flex-col gap-1 px-2 pt-2",
+          "flex min-h-0 flex-1 flex-col gap-1 px-2 pt-2",
           expanded ? "items-stretch" : "items-center"
         )}
       >
