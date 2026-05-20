@@ -88,7 +88,7 @@ export function TopBar() {
             <span className="text-[14.5px] font-semibold tracking-tight">
               {BRAND.name}
             </span>
-            <span className="hidden text-[11px] text-muted-foreground/70 sm:inline">
+            <span className="hidden text-[11px] text-muted-foreground/70 xl:inline">
               / {BRAND.attribution}
             </span>
           </Link>
