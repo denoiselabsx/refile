@@ -172,7 +172,13 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
         })}
 
         {navExtraContent && expanded && (
-          <div className="mt-2 min-h-0 flex-1 overflow-hidden border-t border-border/70 pt-2">
+          // `flex flex-col` so the child can use `flex-1 min-h-0
+          // overflow-y-auto` to scroll. Plain block + h-full doesn't
+          // work for the child — h-full on a flex item resolves
+          // against the parent's CONTENT box, which is just the
+          // child's intrinsic size, so the scroller never gets a
+          // bounded height.
+          <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border/70 pt-2">
             {navExtraContent}
           </div>
         )}
@@ -185,14 +191,27 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
           </div>
         )}
 
-        <div className={cn("flex items-center gap-1", !expanded && "flex-col")}>
+        {/* `min-w-0` on the row + on the avatar Link is the load-bearing
+            pair here. Without it, a long name/email pushes the row past
+            the sidebar's `w-64` and the logout button visibly clips
+            against (or past) the right border. With it, the avatar
+            Link's flex-1 honors the available space and the truncate
+            on the name span actually kicks in. */}
+        <div
+          className={cn(
+            "flex items-center gap-1",
+            expanded ? "min-w-0" : "flex-col",
+          )}
+        >
           <Link
             href="/settings"
             aria-label="Account"
             title={user?.name || "Account"}
             className={cn(
               "flex h-9 items-center rounded-lg transition-colors hover:bg-muted active:scale-[0.97]",
-              expanded ? "flex-1 justify-start px-2" : "w-9 justify-center"
+              expanded
+                ? "min-w-0 flex-1 justify-start px-2"
+                : "w-9 justify-center",
             )}
           >
             <Avatar className="size-7 shrink-0">

@@ -19,8 +19,45 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PresetCard } from "@/components/preset-card";
+import { OfficialRecipeCard } from "@/components/official-recipe-card";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../convex/_generated/api";
+import { PLATFORM_PRESETS } from "@/lib/platform-presets";
+import { CONVERSIONS } from "@/lib/conversions";
+
+/**
+ * Build the unified "Official recipes" list from the two static
+ * prompt sources: platform pills + /convert SEO pages. Shape matches
+ * what OfficialRecipeCard expects.
+ *
+ * These are PROMPTS, not commands — the page header surfaces the
+ * distinction so users know what they're picking between.
+ */
+const OFFICIAL_RECIPES = [
+  ...PLATFORM_PRESETS.map((p) => ({
+    id: p.id,
+    label: `Convert for ${p.label}`,
+    description: p.description,
+    prompt: p.prompt,
+    kind: "platform",
+    category: p.accepts.includes("video")
+      ? "video"
+      : p.accepts.includes("image")
+        ? "image"
+        : p.accepts.includes("pdf")
+          ? "pdf"
+          : "other",
+  })),
+  ...CONVERSIONS.map((c) => ({
+    id: c.slug,
+    label: c.title.replace(" Online — Free", ""),
+    description: c.intro,
+    prompt: c.examplePrompt,
+    slug: c.slug,
+    kind: "conversion",
+    category: c.category,
+  })),
+];
 
 const SORT_OPTIONS = [
   { value: "_creationTime:desc", label: "Newest" },
@@ -108,6 +145,24 @@ export default function PresetsListPage() {
   const hasFilters = Boolean(category || tags.length || debouncedSearch);
   const loading = presets === undefined;
 
+  // Filter the official-recipe list against the same search/category
+  // controls the community grid uses, so a "compress" query trims both
+  // sections in sync. Tags don't apply to officials (they don't carry
+  // a tags array — that's a community-preset concept).
+  const officialMatches = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return OFFICIAL_RECIPES.filter((r) => {
+      if (category && r.category !== category) return false;
+      if (tags.length > 0) return false; // hide officials when tag-filtering
+      if (!q) return true;
+      return (
+        r.label.toLowerCase().includes(q) ||
+        r.description.toLowerCase().includes(q) ||
+        r.prompt.toLowerCase().includes(q)
+      );
+    });
+  }, [debouncedSearch, category, tags]);
+
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-5 sm:py-14">
@@ -115,11 +170,14 @@ export default function PresetsListPage() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-[12px] text-muted-foreground">
               <Layers className="size-3.5" />
-              Community
+              Recipes
             </div>
             <h1 className="text-h1 tracking-tight">Presets</h1>
-            <p className="mt-2 text-[14.5px] text-muted-foreground sm:text-[15px]">
-              Reusable recipes for converting, extracting, and transforming files.
+            <p className="mt-2 max-w-prose text-[14.5px] text-muted-foreground sm:text-[15px]">
+              Two kinds of recipes here: <strong className="text-foreground">official prompts</strong> (we
+              wrote the wording, the AI picks the tool) and{" "}
+              <strong className="text-foreground">community presets</strong> (someone
+              wrote the exact shell command, run deterministically).
             </p>
           </div>
           {isAuthenticated && (
@@ -216,7 +274,41 @@ export default function PresetsListPage() {
           </div>
         )}
 
-        <div className="mt-8">
+        {/* ── Official prompt-based recipes ────────────────────
+            Sourced from src/lib/platform-presets.js (WhatsApp,
+            Instagram, …) and src/lib/conversions.js (the 20 SEO
+            pages). Same search/category filter as the community
+            grid below. Hidden when the user is tag-filtering, since
+            officials don't have tags. */}
+        {officialMatches.length > 0 && (
+          <section className="mt-8">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">
+                Official prompts
+              </h2>
+              <span className="text-[11.5px] text-muted-foreground">
+                {officialMatches.length} recipe{officialMatches.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {officialMatches.map((r) => (
+                <OfficialRecipeCard key={r.id} recipe={r} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="mt-10">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">
+              Community presets
+            </h2>
+            {!loading && presets ? (
+              <span className="text-[11.5px] text-muted-foreground">
+                {presets.length} preset{presets.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
           {loading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
