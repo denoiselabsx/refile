@@ -124,8 +124,19 @@ export default defineSchema({
     userId: v.id("users"),
     title: v.string(),
     lastActivity: v.number(),
+    // True when the user has explicitly starred this chat. Favorites
+    // sort to the top of the history list, ahead of recent activity.
+    // Absent (or false) for ordinary chats.
+    favorite: v.optional(v.boolean()),
   })
-    .index("by_user_recent", ["userId", "lastActivity"]),
+    .index("by_user_recent", ["userId", "lastActivity"])
+    // Full-text search over the chat title so users can find "that PDF
+    // thing I did last week" without scrolling. Filter by user so the
+    // index doesn't return other users' chats.
+    .searchIndex("by_title", {
+      searchField: "title",
+      filterFields: ["userId"],
+    }),
 
   // A prompt = one chat turn: user prompt + AI command + execution result
   prompts: defineTable({

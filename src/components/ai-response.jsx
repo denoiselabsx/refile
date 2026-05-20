@@ -9,6 +9,7 @@ import {
   Save,
   Loader2,
   Circle,
+  RotateCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -168,17 +169,40 @@ export function AIResponse({ prompt }) {
                     : "Completed earlier — files have since expired"}
                 </p>
               </div>
-              {!HIDE_LAUNCH_FEATURES && prompt.aiCommandTemplate && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleSaveAsPreset}
-                  disabled={!isAuthenticated}
-                  className="shrink-0"
-                >
-                  <Save className="size-3.5" /> Save preset
-                </Button>
-              )}
+              <div className="flex shrink-0 items-center gap-1">
+                {/* Run again: opens a fresh chat with this turn's prompt
+                    pre-filled. The user can drop a new file or reuse the
+                    same one. Uses the existing chat_prompt_draft seam
+                    (also used by the SEO landing pages). */}
+                {prompt.prompt && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem(
+                          "chat_prompt_draft",
+                          prompt.prompt
+                        );
+                      } catch {}
+                      router.push("/dashboard");
+                    }}
+                    title="Run this prompt again on a new file"
+                  >
+                    <RotateCw className="size-3.5" /> Run again
+                  </Button>
+                )}
+                {!HIDE_LAUNCH_FEATURES && prompt.aiCommandTemplate && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleSaveAsPreset}
+                    disabled={!isAuthenticated}
+                  >
+                    <Save className="size-3.5" /> Save preset
+                  </Button>
+                )}
+              </div>
             </div>
 
             {prompt.outputUrls?.length > 0 && (

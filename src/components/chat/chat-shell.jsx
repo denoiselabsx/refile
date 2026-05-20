@@ -21,6 +21,8 @@ import {
   PanelRightClose,
   PanelLeftOpen,
   CornerDownRight,
+  Star,
+  Search,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -134,6 +136,17 @@ export function ChatShell({ chatId = null }) {
     api.chats.listMine,
     isAuthenticated ? { limit: 50 } : "skip",
   );
+  // History search. Skips the network when the input is empty so the
+  // default unsearched list still uses listMine (which honors favorites).
+  const [historyQuery, setHistoryQuery] = useState("");
+  const trimmedQuery = historyQuery.trim();
+  const searchResults = useQuery(
+    api.chats.searchMine,
+    isAuthenticated && trimmedQuery
+      ? { query: trimmedQuery, limit: 30 }
+      : "skip",
+  );
+  const toggleFavorite = useMutation(api.chats.toggleFavorite);
   const chatData = useQuery(
     api.chats.get,
     isAuthenticated && chatId ? { id: chatId } : "skip",
@@ -462,6 +475,23 @@ export function ChatShell({ chatId = null }) {
         </div>
       </div>
 
+      {/* Search input — when filled, the list below renders searchMine
+          results instead of listMine. Empty → back to favorites-first
+          recency order. */}
+      <div className="shrink-0 border-b border-border px-3 py-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={historyQuery}
+            onChange={(e) => setHistoryQuery(e.target.value)}
+            placeholder="Search history…"
+            className="block w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-2 text-[12.5px] text-foreground placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none"
+            aria-label="Search history"
+          />
+        </div>
+      </div>
+
       {/* Cross-section nav — only on mobile; on desktop the icon rail handles it */}
       <nav className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
         <ul className="space-y-0.5">
@@ -484,56 +514,101 @@ export function ChatShell({ chatId = null }) {
       </nav>
 
       <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-3">
-        {chats === undefined ? (
-          <div className="space-y-2 px-1">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : chats.length === 0 ? (
-          <div className="px-3 py-10 text-center text-[12.5px] text-muted-foreground">
-            No conversations yet
-          </div>
-        ) : (
-          <ul className="space-y-0.5" aria-label="Chat history">
-            {chats.map((c) => {
-              const active = c._id === chatId;
-              return (
-                <li key={c._id}>
-                  <div
-                    className={cn(
-                      "group flex items-stretch rounded-md transition-colors",
-                      active ? "bg-muted" : "hover:bg-muted/60",
-                    )}
-                  >
-                    <Link
-                      href={`/dashboard/${c._id}`}
-                      onClick={() => setHistoryOpen(false)}
-                      className="min-w-0 flex-1 px-2.5 py-2.5 text-left outline-none focus:outline-none focus-visible:outline-none"
+        {(() => {
+          // Pick the right dataset: a search query overrides the
+          // favorites-first listMine. Both queries return the same row
+          // shape so the render loop doesn't care.
+          const showingSearch = trimmedQuery.length > 0;
+          const list = showingSearch ? searchResults : chats;
+          const loading = list === undefined;
+          if (loading) {
+            return (
+              <div className="space-y-2 px-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            );
+          }
+          if (list.length === 0) {
+            return (
+              <div className="px-3 py-10 text-center text-[12.5px] text-muted-foreground">
+                {showingSearch
+                  ? `No chats match "${trimmedQuery}".`
+                  : "No conversations yet"}
+              </div>
+            );
+          }
+          return (
+            <ul className="space-y-0.5" aria-label="Chat history">
+              {list.map((c) => {
+                const active = c._id === chatId;
+                const fav = c.favorite === true;
+                return (
+                  <li key={c._id}>
+                    <div
+                      className={cn(
+                        "group flex items-stretch rounded-md transition-colors",
+                        active ? "bg-muted" : "hover:bg-muted/60",
+                      )}
                     >
-                      <p className="line-clamp-1 text-[13px] font-medium text-foreground">
-                        {c.title || "Untitled chat"}
-                      </p>
-                      <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground">
-                        {new Date(c.lastActivity).toLocaleDateString(
-                          undefined,
-                          { month: "short", day: "numeric" },
+                      <Link
+                        href={`/dashboard/${c._id}`}
+                        onClick={() => setHistoryOpen(false)}
+                        className="min-w-0 flex-1 px-2.5 py-2.5 text-left outline-none focus:outline-none focus-visible:outline-none"
+                      >
+                        <p className="line-clamp-1 text-[13px] font-medium text-foreground">
+                          {fav ? (
+                            <Star className="mr-1 inline size-3 fill-foreground text-foreground" />
+                          ) : null}
+                          {c.title || "Untitled chat"}
+                        </p>
+                        <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground">
+                          {new Date(c.lastActivity).toLocaleDateString(
+                            undefined,
+                            { month: "short", day: "numeric" },
+                          )}
+                        </p>
+                      </Link>
+                      {/* Star (favorite) — always visible if starred, on
+                          hover/focus if not. Mobile shows it always so
+                          tap-only users can find it. */}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleFavorite({ id: c._id }).catch(() => {});
+                        }}
+                        className={cn(
+                          "my-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-opacity hover:bg-muted",
+                          fav
+                            ? "text-foreground"
+                            : "text-muted-foreground lg:opacity-0 lg:group-hover:opacity-100",
                         )}
-                      </p>
-                    </Link>
-                    <button
-                      onClick={(e) => handleDeleteChat(c._id, e)}
-                      className="mr-1 my-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
-                      aria-label="Delete chat"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                        aria-label={fav ? "Unfavorite" : "Favorite"}
+                        title={fav ? "Unfavorite" : "Favorite"}
+                      >
+                        <Star
+                          className={cn(
+                            "size-3.5",
+                            fav && "fill-foreground",
+                          )}
+                        />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteChat(c._id, e)}
+                        className="mr-1 my-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
+                        aria-label="Delete chat"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        })()}
       </div>
 
       <UsageMeter />

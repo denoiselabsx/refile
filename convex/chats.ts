@@ -9,18 +9,63 @@ function titleFromPrompt(prompt: string): string {
 }
 
 /**
- * List the current user's chats, most recently active first.
+ * List the current user's chats. Favorites first (sorted by recency
+ * within favorites), then everything else by recency. We pull a single
+ * page of `limit` rows and sort in memory — the by_user_recent index
+ * already returns them in recency order so the in-memory cost is
+ * O(limit) and bounded.
  */
 export const listMine = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    return ctx.db
+    const rows = await ctx.db
       .query("chats")
       .withIndex("by_user_recent", (q) => q.eq("userId", userId))
       .order("desc")
       .take(limit ?? 50);
+    // Stable partition: favorites first, recency within each side preserved.
+    const favs = rows.filter((c) => c.favorite === true);
+    const rest = rows.filter((c) => c.favorite !== true);
+    return [...favs, ...rest];
+  },
+});
+
+/**
+ * Search the user's chats by title. Uses the full-text searchIndex on
+ * chats.by_title; the filterFields constraint scopes results to the
+ * caller so a search across all users never leaks rows.
+ *
+ * Returns the same shape as listMine so the history panel can swap
+ * datasets without a structural change.
+ */
+export const searchMine = query({
+  args: { query: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { query, limit }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+    return ctx.db
+      .query("chats")
+      .withSearchIndex("by_title", (q) =>
+        q.search("title", trimmed).eq("userId", userId)
+      )
+      .take(limit ?? 30);
+  },
+});
+
+/** Toggle the favorite flag on one of the user's chats. */
+export const toggleFavorite = mutation({
+  args: { id: v.id("chats") },
+  handler: async (ctx, { id }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not signed in");
+    const chat = await ctx.db.get(id);
+    if (!chat || chat.userId !== userId) throw new Error("Chat not found");
+    await ctx.db.patch(id, { favorite: !chat.favorite });
+    return !chat.favorite;
   },
 });
 
