@@ -119,22 +119,29 @@ export function UsageMeter() {
 
       {/* Cost breakdown only meaningful on paid plans. Hiding it on Free
           removes a confusing "Projected bill: $0.00" that doesn't apply to
-          a hard-stop plan. */}
+          a hard-stop plan. Compact one-line "Projected bill" with the
+          full Groq+Modal split tucked into a <details> so it never
+          clips below the sidebar fold on short viewports — that was
+          the original bug. */}
       {!isDaily && (
-        <dl className="mt-3 space-y-1 text-[11px] text-muted-foreground">
-          <div className="flex justify-between">
-            <dt>Groq (AI)</dt>
-            <dd className="tabular-nums">{fmtUsd(u.groqCostUsd)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt>Modal (compute)</dt>
-            <dd className="tabular-nums">{fmtUsd(u.modalCostUsd)}</dd>
-          </div>
-          <div className="flex justify-between border-t border-border pt-1 font-medium text-foreground">
-            <dt>Projected bill</dt>
-            <dd className="tabular-nums">{fmtUsd(u.projectedBillUsd)}</dd>
-          </div>
-        </dl>
+        <details className="group mt-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-[11.5px] text-muted-foreground transition-colors hover:text-foreground">
+            <span>Projected bill</span>
+            <span className="tabular-nums font-medium text-foreground">
+              {fmtUsd(u.projectedBillUsd)}
+            </span>
+          </summary>
+          <dl className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+            <div className="flex justify-between">
+              <dt>Groq (AI)</dt>
+              <dd className="tabular-nums">{fmtUsd(u.groqCostUsd)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Modal (compute)</dt>
+              <dd className="tabular-nums">{fmtUsd(u.modalCostUsd)}</dd>
+            </div>
+          </dl>
+        </details>
       )}
 
       {u.overageDueUsd > 0 && (

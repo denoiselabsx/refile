@@ -615,69 +615,23 @@ export function ChatShell({ chatId = null }) {
     </>
   );
 
+  // Desktop sidebar's expanded-rail content. Reuses the same list-render
+  // as the mobile drawer (historyPanel) so search, favorites, and the
+  // run-again-from-history affordances work consistently on both
+  // surfaces. The mobile-only nav links are hidden via Tailwind inside
+  // historyPanel itself (`lg:hidden`), so reusing the whole panel is
+  // safe — the desktop version just doesn't render those rows.
   const appSidebarExtra = (
-    <div className="h-full overflow-y-auto overscroll-contain px-1">
-      <div className="flex items-center justify-between px-1 py-1.5">
-        <span className="text-[11px] font-medium text-muted-foreground">History</span>
-      </div>
-      <div className="space-y-0.5">
-        {chats === undefined ? (
-          <div className="space-y-2 px-1 pt-1">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : chats.length === 0 ? (
-          <div className="px-3 py-10 text-center text-[12.5px] text-muted-foreground">
-            No conversations yet
-          </div>
-        ) : (
-          <ul className="space-y-0.5" aria-label="Chat history">
-            {chats.map((c) => {
-              const active = c._id === chatId;
-              return (
-                <li key={c._id}>
-                  <div
-                    className={cn(
-                      "group flex items-stretch rounded-md transition-colors",
-                      active ? "bg-muted" : "hover:bg-muted/60",
-                    )}
-                  >
-                    <Link
-                      href={`/dashboard/${c._id}`}
-                      className="min-w-0 flex-1 px-2.5 py-2.5 text-left outline-none focus:outline-none focus-visible:outline-none"
-                    >
-                      <p className="line-clamp-1 text-[13px] font-medium text-foreground">
-                        {c.title || "Untitled chat"}
-                      </p>
-                      <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground">
-                        {new Date(c.lastActivity).toLocaleDateString(
-                          undefined,
-                          {
-                            month: "short",
-                            day: "numeric",
-                          },
-                        )}
-                      </p>
-                    </Link>
-                    <button
-                      onClick={(e) => handleDeleteChat(c._id, e)}
-                      className="mr-1 my-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
-                      aria-label="Delete chat"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+    <div className="flex h-full flex-col overflow-hidden">
+      {historyPanel}
     </div>
   );
 
-  const appSidebarUsage = <UsageMeter />;
+  // historyPanel (reused as appSidebarExtra above) already renders
+  // <UsageMeter /> at its bottom. We pass null here so the desktop
+  // rail's footer slot doesn't duplicate it. The UsageMeter import
+  // stays for any future direct use.
+  const appSidebarUsage = null;
 
   const inExistingChat = Boolean(chatId);
 
