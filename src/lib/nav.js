@@ -101,6 +101,22 @@ export const FOOTER_COLUMNS = [
     ].filter((link) => !isHiddenLaunchHref(link.href)),
   },
   {
+    // Surfaces the 20 SEO landing pages so visitors who reach the
+    // homepage can browse the conversions directly without typing a
+    // /convert/* URL. The "All conversions" link points at the master
+    // index which lists every one.
+    title: "Convert",
+    links: [
+      { label: "All conversions", href: "/formats" },
+      { label: "MP4 → MP3", href: "/convert/mp4-to-mp3" },
+      { label: "MOV → MP4", href: "/convert/mov-to-mp4" },
+      { label: "HEIC → JPG", href: "/convert/heic-to-jpg" },
+      { label: "PNG → PDF", href: "/convert/png-to-pdf" },
+      { label: "Compress PDF", href: "/convert/compress-pdf" },
+      { label: "Compress video", href: "/convert/compress-video" },
+    ],
+  },
+  {
     title: "Resources",
     links: [
       { label: "Docs", href: "/docs", icon: BookOpen },

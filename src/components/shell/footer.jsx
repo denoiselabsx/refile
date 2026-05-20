@@ -6,7 +6,7 @@ export function Footer() {
   return (
     <footer className="border-t border-border/70 bg-background">
       <div className="mx-auto max-w-6xl px-5 py-14 sm:py-16">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,_1fr)]">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(5,_1fr)]">
           <div>
             <Link
               href="/"

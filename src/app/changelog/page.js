@@ -17,6 +17,23 @@ export const metadata = {
 
 const ENTRIES = [
   {
+    date: "2026-05-20",
+    tag: "Release v0.2",
+    title: "v0.2 — Daily Free tier, SEO, presets, shareable links",
+    body: [
+      "Free plan is now 10 conversions per day (resets at UTC midnight) instead of 15 per month, and the file-size cap goes from 25 MB to 100 MB — a single iPhone video fits.",
+      "20 hand-tuned conversion pages live at /convert/{from-to} (mp4-to-mp3, heic-to-jpg, mov-to-mp4, png-to-pdf, compress-pdf, …). Each drops a file → preset prompt → straight into the dashboard. Full index at /formats.",
+      "Platform presets in the composer: WhatsApp, WhatsApp Status, Instagram Reel/Post, YouTube Thumbnail, Email-safe PDF, Email attachment, Print-ready. One tap fills the right prompt for the platform.",
+      "Shareable output links — 24h /d/{code} pages with Copy link + Share on WhatsApp. Every shared link is also a marketing touchpoint with a Try-ReFile CTA.",
+      "Conversational follow-ups: typing a filename in your prompt now resolves to that file instead of silently auto-chaining the previous output. When auto-chain does fire, a clear \"Following up on X\" indicator appears.",
+      "Trust page rewrite at /security with concrete commitments (where files run, when they're deleted, what the AI actually sees) and a link to the public GitHub repo.",
+      "History gains search, favorite-pinned starring, and a per-turn Run again button.",
+      "Mobile polish: 44px touch targets on the composer, haptic feedback on conversion complete, tap-friendly drop zone copy, and a Files-auto-delete-in-24h trust badge.",
+      "Downloads everywhere now trigger a real save dialog instead of opening files in a new tab.",
+      "Operations: new analytics events table + admin dashboard at /admin/analytics, daily rollup cron, and a shared admin sub-nav at /admin.",
+    ],
+  },
+  {
     date: "2026-05-14",
     tag: "Release",
     title: "Public preview",

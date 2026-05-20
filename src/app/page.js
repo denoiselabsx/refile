@@ -447,6 +447,45 @@ export default function Home() {
       </section>
 
       {/* ───── CTA ───── */}
+      {/* Popular conversions — surfaces the SEO landing pages so visitors
+          who land on the marketing home can discover them without leaving
+          the site or relying on Google. Hand-picked from the data file. */}
+      <section className="border-t border-border/70 bg-subtle/30">
+        <div className="mx-auto max-w-5xl px-5 py-20">
+          <div className="flex items-end justify-between gap-4">
+            <h2 className="text-h2 font-serif">Popular conversions</h2>
+            <Link
+              href="/formats"
+              className="text-[13px] font-medium text-foreground/80 underline-offset-4 hover:text-foreground hover:underline"
+            >
+              See all →
+            </Link>
+          </div>
+          <div className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { slug: "mp4-to-mp3", label: "MP4 → MP3" },
+              { slug: "heic-to-jpg", label: "HEIC → JPG" },
+              { slug: "mov-to-mp4", label: "MOV → MP4" },
+              { slug: "png-to-pdf", label: "PNG → PDF" },
+              { slug: "pdf-to-jpg", label: "PDF → JPG" },
+              { slug: "webp-to-png", label: "WebP → PNG" },
+              { slug: "compress-pdf", label: "Compress PDF" },
+              { slug: "compress-video", label: "Compress video" },
+              { slug: "gif-to-mp4", label: "GIF → MP4" },
+            ].map((c) => (
+              <Link
+                key={c.slug}
+                href={`/convert/${c.slug}`}
+                className="group flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-[13.5px] font-medium text-foreground transition-colors hover:bg-muted/60"
+              >
+                {c.label}
+                <ArrowRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="border-t border-border/70">
         <div className="mx-auto max-w-3xl px-5 py-24 text-center">
           <h2 className="text-h1-serif text-balance">
