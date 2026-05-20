@@ -187,6 +187,13 @@ export default defineSchema({
     // conversion's usage event has been ingested to Polar. runJob skips
     // ingestion if already true, so a runJob retry can't double-bill.
     billedToPolar: v.optional(v.boolean()),
+    // Origin of this row. "api" = submitted via the public REST API.
+    // Absent = browser/UI. Used to drive per-step billing and analytics.
+    source: v.optional(v.union(v.literal("api"), v.literal("ui"))),
+    // For API submissions: the customer's webhook URL to POST job
+    // settlement to. Absent = no webhook configured. The Phase 3
+    // post-settlement action reads this column.
+    webhookUrl: v.optional(v.string()),
   })
     .index("by_user_recent", ["userId"])
     .index("by_chat", ["chatId", "turnIndex"])
@@ -235,4 +242,21 @@ export default defineSchema({
     nodes: v.any(),
     edges: v.any(),
   }).index("by_user", ["userId"]),
+
+  // API keys for the public REST API. Each row = one credential a user can
+  // use to call /api/v1/*. The raw key is NEVER stored — only its sha256
+  // hash. We keep the first 8 chars of the raw key (the "prefix") for UI
+  // display so users can recognize keys without seeing the secret.
+  apiKeys: defineTable({
+    userId: v.id("users"),
+    name: v.string(),              // user-supplied label, e.g. "production"
+    keyHash: v.string(),           // sha256(rawKey), the lookup key
+    keyPrefix: v.string(),         // first 11 chars of raw key for display ("rf_live_abc")
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()), // soft-delete; resolveKey rejects revoked keys
+    scopes: v.array(v.string()),   // future-proof; for v1 always ["jobs:write","jobs:read"]
+  })
+    .index("by_user", ["userId"])
+    .index("by_keyHash", ["keyHash"]),
 });

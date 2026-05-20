@@ -190,6 +190,198 @@ export const submit = mutation({
 });
 
 /* ──────────────────────────────────────────────────────────────── *
+ *  Server-to-server submit (called by the public API routes).
+ *  Bridge-secret-guarded (same pattern as plans.applyPolarSubscription).
+ *  Does NOT call getAuthUserId — userId is passed explicitly after the
+ *  Next.js route validates the API key. Sets `source: "api"` on the row
+ *  so analytics / per-step billing can distinguish API jobs from browser
+ *  jobs without affecting the existing flow.
+ * ──────────────────────────────────────────────────────────────── */
+export const submitForUser = mutation({
+  args: {
+    secret: v.string(),
+    userId: v.id("users"),
+    prompt: v.string(),
+    inputStorageIds: v.array(v.id("_storage")),
+    inputFilenames: v.array(v.string()),
+    chatId: v.optional(v.id("chats")),
+    webhookUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const expected = process.env.API_BRIDGE_SECRET;
+    if (!expected) throw new Error("API_BRIDGE_SECRET is not set");
+    if (args.secret !== expected) throw new Error("Invalid bridge secret.");
+
+    const userId = args.userId;
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    // Resolve or create the chat for this turn. API callers can omit chatId —
+    // we create a synthetic chat per submission for history continuity.
+    let chatId = args.chatId;
+    if (chatId) {
+      const chat = await ctx.db.get(chatId);
+      if (!chat || chat.userId !== userId) throw new Error("Chat not found");
+    } else {
+      chatId = await ctx.db.insert("chats", {
+        userId,
+        title: titleFromPrompt(args.prompt),
+        lastActivity: Date.now(),
+      });
+    }
+
+    const existingTurns = await ctx.db
+      .query("prompts")
+      .withIndex("by_chat", (q) => q.eq("chatId", chatId!))
+      .collect();
+    const turnIndex = existingTurns.length;
+
+    const inputStorageIds = args.inputStorageIds;
+    const inputFilenames = args.inputFilenames.map(sanitizeFilename);
+
+    if (inputStorageIds.length > 0) {
+      let totalBytes = 0;
+      for (const sid of inputStorageIds) {
+        const meta = await ctx.db.system.get(sid);
+        totalBytes += meta?.size ?? 0;
+      }
+      await assertWithinQuota(
+        ctx,
+        userId,
+        inputStorageIds.length,
+        totalBytes
+      );
+    }
+
+    const promptId = await ctx.db.insert("prompts", {
+      userId,
+      chatId,
+      turnIndex,
+      prompt: args.prompt,
+      inputStorageIds,
+      inputFilenames,
+      status: "pending",
+      // source + webhookUrl are new columns added in this phase; the schema
+      // patch in this same commit makes them optional so existing rows are
+      // valid. webhookUrl is only meaningful for API rows.
+      source: "api" as const,
+      webhookUrl: args.webhookUrl,
+    });
+
+    await ctx.db.patch(chatId, { lastActivity: Date.now() });
+    await ctx.scheduler.runAfter(0, internal.runJob.runJob, { promptId });
+
+    return { promptId, chatId };
+  },
+});
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  Server-to-server job fetch (called by GET /api/v1/jobs/:id).
+ *  Bridge-secret-guarded. Returns the sanitized API shape — never the
+ *  internal command, tool name, sandbox logs, or error message verbatim.
+ *  Maps Convex's "completed" status to "succeeded" for API consumers
+ *  (industry-standard naming).
+ * ──────────────────────────────────────────────────────────────── */
+export const getForApi = query({
+  args: {
+    secret: v.string(),
+    promptId: v.id("prompts"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { secret, promptId, userId }) => {
+    const expected = process.env.API_BRIDGE_SECRET;
+    if (!expected) throw new Error("API_BRIDGE_SECRET is not set");
+    if (secret !== expected) throw new Error("Invalid bridge secret.");
+
+    const row = await ctx.db.get(promptId);
+    if (!row || row.userId !== userId) return null;
+
+    // Outputs: signed URLs. Filtered out if files have expired.
+    const outputs = row.outputStorageIds
+      ? await Promise.all(
+          row.outputStorageIds.map(async (sid, i) => ({
+            storageId: sid as string,
+            filename: row.outputFilenames?.[i] ?? "output",
+            url: await ctx.storage.getUrl(sid),
+          }))
+        )
+      : [];
+
+    // Pipeline summary — surface count + statuses, but never commands/logs.
+    const pipeline = row.pipelineSteps
+      ? row.pipelineSteps.map((s) => ({
+          description: s.description,
+          status: s.status,
+        }))
+      : null;
+
+    // Map internal status → API status. "completed" → "succeeded".
+    const apiStatus =
+      row.status === "completed"
+        ? "succeeded"
+        : (row.status as "pending" | "generating" | "running" | "failed");
+
+    // Failure: surface coarse failureKind + generic message. NEVER leak
+    // raw errorMessage (which contains tool names, paths, stderr).
+    let errorBody: { code: string; message: string } | undefined;
+    if (row.status === "failed") {
+      const kind = row.failureKind ?? "aiError";
+      errorBody = mapFailureKindToApi(kind);
+    }
+
+    return {
+      id: row._id,
+      chat_id: row.chatId ?? null,
+      status: apiStatus,
+      description: row.aiDescription ?? null,
+      kind: row.aiKind ?? null, // "command" | "chat"
+      message: row.aiKind === "chat" ? (row.aiMessage ?? null) : null,
+      input_files: row.inputFilenames ?? [],
+      outputs,
+      pipeline,
+      files_expired: row.filesExpired ?? false,
+      created_at: row._creationTime,
+      error: errorBody,
+    };
+  },
+});
+
+// Coarse failure taxonomy → API error body. Keep messages generic and
+// actionable; never reference tool names or internal infrastructure.
+function mapFailureKindToApi(kind: string): { code: string; message: string } {
+  switch (kind) {
+    case "complex":
+      return {
+        code: "unprocessable_request",
+        message: "The request was too complex to handle in one shot. Break it into smaller steps.",
+      };
+    case "noInput":
+      return {
+        code: "invalid_request",
+        message: "No file was provided for an operation that requires one.",
+      };
+    case "noOutput":
+      return {
+        code: "no_output",
+        message: "The job ran but produced no output. Check the input file and prompt.",
+      };
+    case "execError":
+      return {
+        code: "execution_failed",
+        message: "The job failed on this particular file. It may be corrupt, an unsupported format, or password-protected.",
+      };
+    case "config":
+      return { code: "internal_error", message: "A temporary service problem occurred. Please retry." };
+    case "aiError":
+    default:
+      return {
+        code: "unprocessable_request",
+        message: "Could not understand the request. Try describing the end result in plain words.",
+      };
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────── *
  *  Internal updates from runJob
  * ──────────────────────────────────────────────────────────────── */
 
