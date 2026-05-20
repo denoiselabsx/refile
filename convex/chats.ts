@@ -41,6 +41,10 @@ export const get = query({
       .collect();
     rawTurns.sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
 
+    // Index turns by id so we can resolve chainedFromPromptId → its
+    // output filename in a single pass without an extra DB roundtrip.
+    const byId = new Map(rawTurns.map((t) => [t._id, t]));
+
     // Attach signed download URLs for any outputs.
     const turns = await Promise.all(
       rawTurns.map(async (t) => {
@@ -62,7 +66,15 @@ export const get = query({
               }))
             )
           : [];
-        return { ...t, outputUrls, inputUrls };
+        // If this turn auto-chained, surface the prior turn's first
+        // output filename so the UI can render "Following up on X".
+        // Falls back to null when the chain points at a deleted turn.
+        let chainedFromFilename = null;
+        if (t.chainedFromPromptId) {
+          const prev = byId.get(t.chainedFromPromptId);
+          chainedFromFilename = prev?.outputFilenames?.[0] ?? null;
+        }
+        return { ...t, outputUrls, inputUrls, chainedFromFilename };
       })
     );
 

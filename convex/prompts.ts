@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel";
 import { assertWithinQuota, assertApiAllowed } from "./plans";
 import { publicPrompt } from "../lib/sanitize.js";
 
@@ -180,6 +181,7 @@ export const submit = mutation({
     let inputStorageIds = args.inputStorageIds;
     let inputFilenames = args.inputFilenames.map(sanitizeFilename);
     let autoChained = false;
+    let chainedFromPromptId: Id<"prompts"> | undefined;
 
     if (inputStorageIds.length === 0 && existingTurns.length > 0) {
       // Collect every (storageId, filename) pair this chat has seen so we
@@ -233,6 +235,7 @@ export const submit = mutation({
             sanitizeFilename
           );
           autoChained = true;
+          chainedFromPromptId = lastWithOutputs._id;
         }
       }
     }
@@ -268,6 +271,9 @@ export const submit = mutation({
       inputStorageIds,
       inputFilenames,
       status: "pending",
+      ...(chainedFromPromptId
+        ? { chainedFromPromptId }
+        : {}),
     });
 
     // Bump the chat's lastActivity so it sorts to the top.

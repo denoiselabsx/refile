@@ -25,7 +25,15 @@ import { SITE_URL } from "@/lib/site";
  * Lives next to the Download button. Only renders for output files —
  * sharing your own input would be useless.
  */
-export function ShareButton({ promptId, storageId, filename }) {
+/**
+ * variant:
+ *   "hover" (default) — icon-only button that only appears on parent
+ *      group-hover. Used in the Uploads sidebar where dozens of files
+ *      share a row each.
+ *   "inline" — always-visible pill matching the inline Download button
+ *      next to it on the chat result card.
+ */
+export function ShareButton({ promptId, storageId, filename, variant = "hover" }) {
   const create = useMutation(api.shareLinks.createForOutput);
   const [shortCode, setShortCode] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -87,15 +95,28 @@ export function ShareButton({ promptId, storageId, filename }) {
   return (
     <DropdownMenu onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          disabled={busy}
-          className="hidden rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground group-hover:inline-flex disabled:opacity-60"
-          aria-label={`Share ${filename}`}
-          title="Share link (24h)"
-        >
-          <Share2 className="size-3.5" />
-        </button>
+        {variant === "inline" ? (
+          <button
+            type="button"
+            disabled={busy}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-60"
+            aria-label={`Share ${filename}`}
+            title="Share link (24h)"
+          >
+            <Share2 className="size-3.5" />
+            Share
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            className="hidden rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground group-hover:inline-flex disabled:opacity-60"
+            aria-label={`Share ${filename}`}
+            title="Share link (24h)"
+          >
+            <Share2 className="size-3.5" />
+          </button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[280px]">
         <DropdownMenuLabel className="pb-1">Shareable link</DropdownMenuLabel>

@@ -20,6 +20,7 @@ import {
   Download,
   PanelRightClose,
   PanelLeftOpen,
+  CornerDownRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { Composer } from "@/components/composer";
 import { QuickActions } from "@/components/quick-actions";
 import { ShareButton } from "@/components/share-button";
+import { downloadFile } from "@/lib/download-file";
 import { AIResponse } from "@/components/ai-response";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -696,17 +698,15 @@ export function ChatShell({ chatId = null }) {
                         {fileTypeLabel(f.filename)}
                       </span>
                       {f.url ? (
-                        <a
-                          href={f.url}
-                          download={f.filename}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => downloadFile(f.url, f.filename)}
                           className="hidden rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground group-hover:inline-flex"
                           aria-label={`Download ${f.filename}`}
                           title="Download"
                         >
                           <Download className="size-3.5" />
-                        </a>
+                        </button>
                       ) : (
                         <span
                           className="hidden rounded p-1 text-muted-foreground/60 group-hover:inline-flex"
@@ -1125,6 +1125,22 @@ function Turn({ turn }) {
       {/* User message */}
       <div className="flex justify-end">
         <div className="max-w-[85%] sm:max-w-[75%]">
+          {/* Auto-chain indicator: when this turn reused the previous
+              turn's output (no fresh upload, no filename in prompt),
+              show "Following up on X" so the user knows what file the
+              AI is actually working with. Hidden for first turns and
+              for turns where the user provided their own input. */}
+          {turn.chainedFromFilename ? (
+            <div className="mb-1.5 flex justify-end">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-2 py-0.5 text-[10.5px] text-muted-foreground">
+                <CornerDownRight className="size-3" />
+                Following up on{" "}
+                <span className="text-mono text-foreground/80">
+                  {turn.chainedFromFilename}
+                </span>
+              </span>
+            </div>
+          ) : null}
           <div className="rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5 text-[14.5px] leading-relaxed text-foreground">
             {turn.prompt}
           </div>

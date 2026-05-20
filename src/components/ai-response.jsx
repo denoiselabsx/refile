@@ -19,6 +19,8 @@ import { parseUpgradeError } from "../../lib/upgrade.js";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 import { FilePreview, PreviewModal } from "@/components/preview";
 import { canPreview } from "@/lib/preview";
+import { ShareButton } from "@/components/share-button";
+import { downloadFile } from "@/lib/download-file";
 
 export function AIResponse({ prompt }) {
   const router = useRouter();
@@ -222,16 +224,22 @@ export function AIResponse({ prompt }) {
                       </span>
                     </div>
                     {out.url && (
-                      <a
-                        href={out.url}
-                        download={out.filename}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
-                      >
-                        <Download className="size-3.5" />
-                        Download
-                      </a>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <ShareButton
+                          promptId={prompt._id}
+                          storageId={out.storageId}
+                          filename={out.filename}
+                          variant="inline"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => downloadFile(out.url, out.filename)}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                        >
+                          <Download className="size-3.5" />
+                          Download
+                        </button>
+                      </div>
                     )}
                   </li>
                   );

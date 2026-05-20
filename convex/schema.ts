@@ -199,6 +199,12 @@ export default defineSchema({
     // conversion's usage event has been ingested to Polar. runJob skips
     // ingestion if already true, so a runJob retry can't double-bill.
     billedToPolar: v.optional(v.boolean()),
+    // When this turn auto-chained from a previous turn's output (no new
+    // upload, no filename in the prompt), the prior turn's id goes here
+    // so the UI can render "Following up on {prev output} ↻" without
+    // having to re-derive the inference. Absent on first turns and on
+    // any turn that received an explicit upload or filename mention.
+    chainedFromPromptId: v.optional(v.id("prompts")),
     // Origin of this row. "api" = submitted via the public REST API.
     // Absent = browser/UI. Used to drive per-step billing and analytics.
     source: v.optional(v.union(v.literal("api"), v.literal("ui"))),
