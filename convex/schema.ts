@@ -311,4 +311,27 @@ export default defineSchema({
     count: v.number(),                    // total occurrences that day
     uniqueUsers: v.number(),              // distinct userId|anonId values
   }).index("by_day_name", ["day", "name"]),
+
+  // Shareable output links. A short code points at one of the user's
+  // output storage blobs; visiting /d/{code} hits a small public route
+  // that re-signs the storage URL and serves a download page.
+  //
+  // 24h expiry matches the cleanup cron — when the blob is deleted, the
+  // share row keeps existing but the page just shows "this file has
+  // expired" instead of redirecting to a 404 URL.
+  shareLinks: defineTable({
+    userId: v.id("users"),                // owner (used for revocation auth)
+    promptId: v.id("prompts"),            // source job, for audit
+    storageId: v.id("_storage"),          // the output blob to serve
+    filename: v.string(),                 // pretty name shown on the page
+    sizeBytes: v.number(),                // shown on the page
+    shortCode: v.string(),                // public URL fragment (nanoid)
+    createdAt: v.number(),
+    expiresAt: v.number(),                // createdAt + 24h, matches retention
+    revoked: v.boolean(),                 // user can revoke before expiry
+    viewCount: v.number(),                // bumped on each /d/{code} hit
+  })
+    .index("by_short", ["shortCode"])
+    .index("by_user", ["userId"])
+    .index("by_prompt", ["promptId"]),
 });

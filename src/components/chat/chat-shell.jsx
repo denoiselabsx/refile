@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { Composer } from "@/components/composer";
 import { QuickActions } from "@/components/quick-actions";
+import { ShareButton } from "@/components/share-button";
 import { AIResponse } from "@/components/ai-response";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -300,6 +301,10 @@ export function ChatShell({ chatId = null }) {
             filename: out.filename,
             kind: "output",
             url: out.url,
+            // Carried so the "Share" button in the file row can mint a
+            // share link against the right prompt. Inputs don't get one
+            // — only outputs are shareable.
+            promptId: turn._id,
           });
         }
       }
@@ -710,6 +715,13 @@ export function ChatShell({ chatId = null }) {
                           <Download className="size-3.5" />
                         </span>
                       )}
+                      {f.kind === "output" && f.promptId && f.storageId ? (
+                        <ShareButton
+                          promptId={f.promptId}
+                          storageId={f.storageId}
+                          filename={f.filename}
+                        />
+                      ) : null}
                     </div>
                   </div>
                 </div>
