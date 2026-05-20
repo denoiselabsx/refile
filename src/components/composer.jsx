@@ -23,6 +23,19 @@ export function Composer({
 
   const textareaRef = useRef(null);
 
+  // Allow the parent to inject a new prompt mid-session (e.g. the
+  // Quick Actions row tapping "WhatsApp"). We only overwrite when the
+  // incoming value is non-empty AND different — empty initialPrompt
+  // resets after submit shouldn't clobber whatever the user is typing.
+  useEffect(() => {
+    if (initialPrompt && initialPrompt !== prompt) {
+      setPrompt(initialPrompt);
+    }
+    // Intentionally exclude `prompt` — we only react to PARENT-driven
+    // changes of initialPrompt, not local edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt]);
+
   // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;

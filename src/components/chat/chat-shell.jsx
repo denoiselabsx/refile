@@ -25,6 +25,7 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { Composer } from "@/components/composer";
+import { QuickActions } from "@/components/quick-actions";
 import { AIResponse } from "@/components/ai-response";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1002,6 +1003,16 @@ export function ChatShell({ chatId = null }) {
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="mx-auto w-full max-w-3xl px-3 pb-3 pt-2.5 sm:px-6 sm:pb-5 sm:pt-4">
+              {/* Quick Actions — platform presets (WhatsApp, Instagram,
+                  Email, …). Hidden when no files are staged; tapping a
+                  pill mutates `initialPrompt` so the Composer re-seeds
+                  with a platform-aware natural-language prompt. */}
+              <QuickActions
+                stagedFilenames={uploads
+                  .filter((u) => u.kind === "input")
+                  .map((u) => u.filename)}
+                onSelect={(promptText) => setInitialPrompt(promptText)}
+              />
               <Composer
                 onSubmit={handleSubmit}
                 onOpenUploads={handleComposerAttach}
