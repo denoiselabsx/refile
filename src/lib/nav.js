@@ -79,6 +79,7 @@ export const APP_NAV = [
 export const MARKETING_NAV = [
   { href: "/presets", label: "Presets" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/developers", label: "Developers" },
   { href: "/docs", label: "Docs" },
   { href: "/changelog", label: "Changelog" },
 ].filter((item) => !isHiddenLaunchHref(item.href));
@@ -95,6 +96,7 @@ export const FOOTER_COLUMNS = [
       { label: "Presets", href: "/presets" },
       { label: "Workflows", href: "/workflow" },
       { label: "Pricing", href: "/pricing" },
+      { label: "Developers", href: "/developers" },
       { label: "Changelog", href: "/changelog" },
     ].filter((link) => !isHiddenLaunchHref(link.href)),
   },
