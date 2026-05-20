@@ -615,23 +615,136 @@ export function ChatShell({ chatId = null }) {
     </>
   );
 
-  // Desktop sidebar's expanded-rail content. Reuses the same list-render
-  // as the mobile drawer (historyPanel) so search, favorites, and the
-  // run-again-from-history affordances work consistently on both
-  // surfaces. The mobile-only nav links are hidden via Tailwind inside
-  // historyPanel itself (`lg:hidden`), so reusing the whole panel is
-  // safe — the desktop version just doesn't render those rows.
+  // Desktop sidebar's expanded-rail content. Mirrors the mobile-drawer
+  // historyPanel — same search input, same favorites-first list, same
+  // star/delete affordances — but DOES NOT include the UsageMeter at
+  // its tail. The desktop sidebar's slot for navExtraContent is a
+  // bounded flex-1 region; rendering the meter inside it makes the
+  // list eat all available height and clip the meter off-screen with
+  // no scrollbar (the bug in the v0.2 sidebar fix). The meter belongs
+  // in the dedicated footerExtraContent slot below, where it gets a
+  // guaranteed fixed-height row above the avatar / settings strip.
   const appSidebarExtra = (
-    <div className="flex h-full flex-col overflow-hidden">
-      {historyPanel}
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Search input — same UX as the mobile drawer */}
+      <div className="shrink-0 px-2 pb-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={historyQuery}
+            onChange={(e) => setHistoryQuery(e.target.value)}
+            placeholder="Search history…"
+            className="block w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-2 text-[12.5px] text-foreground placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none"
+            aria-label="Search history"
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-3 pb-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">
+          History
+        </span>
+      </div>
+      {/* Scrollable list. min-h-0 on the parent flex column is what
+          actually lets this child have overflow-y-auto work — without
+          it, flex children default to min-content size and the
+          scrollbar never appears. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+        {(() => {
+          const showingSearch = trimmedQuery.length > 0;
+          const list = showingSearch ? searchResults : chats;
+          if (list === undefined) {
+            return (
+              <div className="space-y-2 px-1 pt-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            );
+          }
+          if (list.length === 0) {
+            return (
+              <div className="px-3 py-10 text-center text-[12.5px] text-muted-foreground">
+                {showingSearch
+                  ? `No chats match "${trimmedQuery}".`
+                  : "No conversations yet"}
+              </div>
+            );
+          }
+          return (
+            <ul className="space-y-0.5" aria-label="Chat history">
+              {list.map((c) => {
+                const active = c._id === chatId;
+                const fav = c.favorite === true;
+                return (
+                  <li key={c._id}>
+                    <div
+                      className={cn(
+                        "group flex items-stretch rounded-md transition-colors",
+                        active ? "bg-muted" : "hover:bg-muted/60",
+                      )}
+                    >
+                      <Link
+                        href={`/dashboard/${c._id}`}
+                        className="min-w-0 flex-1 px-2.5 py-2 text-left outline-none focus:outline-none focus-visible:outline-none"
+                      >
+                        <p className="line-clamp-1 text-[12.5px] font-medium text-foreground">
+                          {fav ? (
+                            <Star className="mr-1 inline size-3 fill-foreground text-foreground" />
+                          ) : null}
+                          {c.title || "Untitled chat"}
+                        </p>
+                        <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                          {new Date(c.lastActivity).toLocaleDateString(
+                            undefined,
+                            { month: "short", day: "numeric" },
+                          )}
+                        </p>
+                      </Link>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleFavorite({ id: c._id }).catch(() => {});
+                        }}
+                        className={cn(
+                          "my-1 inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-opacity hover:bg-muted",
+                          fav
+                            ? "text-foreground"
+                            : "text-muted-foreground lg:opacity-0 lg:group-hover:opacity-100",
+                        )}
+                        aria-label={fav ? "Unfavorite" : "Favorite"}
+                        title={fav ? "Unfavorite" : "Favorite"}
+                      >
+                        <Star
+                          className={cn(
+                            "size-3.5",
+                            fav && "fill-foreground",
+                          )}
+                        />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteChat(c._id, e)}
+                        className="mr-1 my-1 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
+                        aria-label="Delete chat"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        })()}
+      </div>
     </div>
   );
 
-  // historyPanel (reused as appSidebarExtra above) already renders
-  // <UsageMeter /> at its bottom. We pass null here so the desktop
-  // rail's footer slot doesn't duplicate it. The UsageMeter import
-  // stays for any future direct use.
-  const appSidebarUsage = null;
+  // UsageMeter lives in the desktop rail's footer slot — fixed-height
+  // row above the avatar/settings strip, guaranteed visible regardless
+  // of how long the chat history grows.
+  const appSidebarUsage = <UsageMeter />;
 
   const inExistingChat = Boolean(chatId);
 
