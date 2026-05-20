@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { Zap } from "lucide-react";
@@ -7,13 +8,51 @@ import { api } from "../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 
 /**
- * Compact monthly-usage meter shown at the bottom of the history sidebar.
+ * Compact usage meter shown at the bottom of the history sidebar.
+ *
+ * Free plan resets DAILY at UTC midnight — the meter shows a "resets in Hh Mm"
+ * countdown so the limit feels like a daily allowance, not a one-time stress
+ * point. Paid plans bill monthly and show the cost breakdown.
  *
  * Numbers come straight from convex/plans.ts `myUsage`, which mirrors the
  * billing math in lib/plans.js — so what the user sees here is exactly what
  * they'll be charged. Failed conversions are never counted (metered only on
  * success in runJob), so this also doubles as honest cost transparency.
  */
+
+function msUntilNextUtcMidnight() {
+  const now = new Date();
+  const next = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0,
+      0
+    )
+  );
+  return Math.max(0, next.getTime() - now.getTime());
+}
+
+function formatResetCountdown(ms) {
+  const totalMin = Math.ceil(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
+function DailyReset() {
+  const [ms, setMs] = useState(() => msUntilNextUtcMidnight());
+  useEffect(() => {
+    const id = setInterval(() => setMs(msUntilNextUtcMidnight()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return <>Resets in {formatResetCountdown(ms)}</>;
+}
+
 export function UsageMeter() {
   const u = useQuery(api.plans.myUsage);
 
@@ -25,6 +64,7 @@ export function UsageMeter() {
     Math.round((u.conversions / Math.max(1, u.includedConversions)) * 100)
   );
   const overQuota = u.conversions >= u.includedConversions;
+  const isDaily = u.periodKind === "day";
   const fmtUsd = (n) => `$${(n || 0).toFixed(n < 1 ? 4 : 2)}`;
 
   return (
@@ -32,7 +72,7 @@ export function UsageMeter() {
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
           <Zap className="size-3" />
-          {u.planName} · this month
+          {u.planName} · {isDaily ? "today" : "this month"}
         </span>
         <Link
           href="/pricing"
@@ -49,7 +89,8 @@ export function UsageMeter() {
             {u.conversions}
             <span className="text-muted-foreground">
               {" "}
-              / {u.includedConversions} conversions
+              of {u.includedConversions}{" "}
+              {isDaily ? "today" : "conversions"}
             </span>
           </span>
           {overQuota && u.extraConversions > 0 && (
@@ -69,23 +110,32 @@ export function UsageMeter() {
             style={{ width: `${pct}%` }}
           />
         </div>
+        {isDaily && (
+          <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+            <DailyReset />
+          </p>
+        )}
       </div>
 
-      {/* Real provider-cost breakdown — accurate, not estimated */}
-      <dl className="mt-3 space-y-1 text-[11px] text-muted-foreground">
-        <div className="flex justify-between">
-          <dt>Groq (AI)</dt>
-          <dd className="tabular-nums">{fmtUsd(u.groqCostUsd)}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt>Modal (compute)</dt>
-          <dd className="tabular-nums">{fmtUsd(u.modalCostUsd)}</dd>
-        </div>
-        <div className="flex justify-between border-t border-border pt-1 font-medium text-foreground">
-          <dt>Projected bill</dt>
-          <dd className="tabular-nums">{fmtUsd(u.projectedBillUsd)}</dd>
-        </div>
-      </dl>
+      {/* Cost breakdown only meaningful on paid plans. Hiding it on Free
+          removes a confusing "Projected bill: $0.00" that doesn't apply to
+          a hard-stop plan. */}
+      {!isDaily && (
+        <dl className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+          <div className="flex justify-between">
+            <dt>Groq (AI)</dt>
+            <dd className="tabular-nums">{fmtUsd(u.groqCostUsd)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Modal (compute)</dt>
+            <dd className="tabular-nums">{fmtUsd(u.modalCostUsd)}</dd>
+          </div>
+          <div className="flex justify-between border-t border-border pt-1 font-medium text-foreground">
+            <dt>Projected bill</dt>
+            <dd className="tabular-nums">{fmtUsd(u.projectedBillUsd)}</dd>
+          </div>
+        </dl>
+      )}
 
       {u.overageDueUsd > 0 && (
         <p className="mt-2 text-[10.5px] leading-relaxed text-muted-foreground">

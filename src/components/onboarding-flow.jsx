@@ -39,9 +39,9 @@ const STEPS = [
       <>
         That's{" "}
         <strong className="text-foreground">
-          {free.includedConversions} conversions a month
-        </strong>
-        , files up to{" "}
+          {free.includedConversions} conversions a day
+        </strong>{" "}
+        (resets at UTC midnight), files up to{" "}
         <strong className="text-foreground">
           {Math.round(free.maxFileBytes / (1024 * 1024))} MB
         </strong>

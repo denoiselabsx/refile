@@ -48,20 +48,32 @@ export default defineSchema({
     polarCurrentPeriodEnd: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
-  // Per-user, per-month metered usage. One row per (user, month) where month
-  // is "YYYY-MM" in UTC. Written by the runJob metering step ONLY on a
-  // successful conversion, so failures are never counted or charged. The
-  // Groq/Modal columns track real provider cost so the dashboard can show an
-  // accurate breakdown and we can add a markup at monthly payout.
+  // Per-user, per-period metered usage. Free plan uses one row per UTC day
+  // ("YYYY-MM-DD"); paid plans use one row per UTC month ("YYYY-MM"). The
+  // `periodKind` column makes the row self-describing so a user upgrading
+  // mid-cycle doesn't confuse the meter. Written by the runJob metering
+  // step ONLY on a successful conversion, so failures are never counted
+  // or charged. The Groq/Modal columns track real provider cost so the
+  // dashboard can show an accurate breakdown and we can add a markup at
+  // monthly payout.
+  //
+  // The legacy `month` column is still present and double-written for one
+  // deploy cycle so we can ship without a migration; reads use `period`.
   userUsage: defineTable({
     userId: v.id("users"),
-    month: v.string(), // "2026-05"
+    period: v.optional(v.string()),       // "2026-05-20" (day) or "2026-05" (month)
+    periodKind: v.optional(
+      v.union(v.literal("day"), v.literal("month"))
+    ),
+    month: v.optional(v.string()),        // legacy, double-written, do not read
     conversions: v.number(),
     groqInputTokens: v.number(),
     groqOutputTokens: v.number(),
-    modalMs: v.number(), // wall-clock proxy for Modal compute time
+    modalMs: v.number(),                  // wall-clock proxy for Modal compute time
     bytesProcessed: v.number(),
-  }).index("by_user_month", ["userId", "month"]),
+  })
+    .index("by_user_month", ["userId", "month"])
+    .index("by_user_period", ["userId", "period"]),
 
   // Reusable shell-command recipes
   presets: defineTable({

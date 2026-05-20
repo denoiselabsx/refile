@@ -26,12 +26,34 @@ export const API_FREE_TRIAL_JOBS = 20;
 export const API_FREE_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const API_FREE_MAX_FILES = 1;
 
-/** Current month bucket key, UTC, e.g. "2026-05". Must match metering. */
+/** Current month bucket key, UTC, e.g. "2026-05". Used by paid plans. */
 export function monthKey(date = new Date()): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(
     2,
     "0"
   )}`;
+}
+
+/** Current day bucket key, UTC, e.g. "2026-05-20". Used by the Free plan. */
+export function dayKey(date = new Date()): string {
+  return (
+    `${date.getUTCFullYear()}-` +
+    `${String(date.getUTCMonth() + 1).padStart(2, "0")}-` +
+    `${String(date.getUTCDate()).padStart(2, "0")}`
+  );
+}
+
+/** Resolve the right period bucket for a plan. Free → today (UTC),
+ *  everything else → this UTC month. The plan's `quotaPeriod` field is the
+ *  source of truth; absence means month for back-compat. */
+export function periodKeyFor(plan: { quotaPeriod?: string }): {
+  period: string;
+  periodKind: "day" | "month";
+} {
+  if (plan.quotaPeriod === "day") {
+    return { period: dayKey(), periodKind: "day" };
+  }
+  return { period: monthKey(), periodKind: "month" };
 }
 
 /** Resolve a user's plan id; absence of a row = Free. */
@@ -59,22 +81,34 @@ export async function regionForUser(
   return row?.region ?? "global";
 }
 
-/** This month's usage row for a user, or a zeroed shape if none yet. */
+/**
+ * The user's current usage row for THIS period (day for Free, month for
+ * paid plans). Returns a zeroed shape if no row exists yet. The plan is
+ * looked up internally so callers don't have to thread it through.
+ */
 export async function usageForUser(
   ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-  month = monthKey()
+  userId: Id<"users">
 ) {
+  const planId = await planIdForUser(ctx, userId);
+  const plan = getPlan(planId);
+  const { period, periodKind } = periodKeyFor(plan);
+
   const row = await ctx.db
     .query("userUsage")
-    .withIndex("by_user_month", (q) =>
-      q.eq("userId", userId).eq("month", month)
+    .withIndex("by_user_period", (q) =>
+      q.eq("userId", userId).eq("period", period)
     )
     .unique();
+
   return (
     row ?? {
       userId,
-      month,
+      period,
+      periodKind,
+      // Legacy double-write — kept on inserts so downgraded queries still
+      // function during the deploy window. Reads must use `period`.
+      month: periodKind === "month" ? period : monthKey(),
       conversions: 0,
       groqInputTokens: 0,
       groqOutputTokens: 0,
@@ -122,21 +156,29 @@ export async function assertWithinQuota(
     );
   }
 
-  // Monthly conversion quota. Hard stop for Free; paid plans flow into
-  // metered overage (allowed here, billed at payout).
+  // Conversion quota. Hard stop for Free; paid plans flow into metered
+  // overage (allowed here, billed at payout). Free is bucketed PER UTC
+  // DAY so the error wording must match — talking about a monthly cap
+  // when the user only has 10 a day is misleading.
   if (usage.conversions >= plan.includedConversions) {
     if (plan.overagePerConversion == null) {
-      // Analytics: the upgrade-pressure moment. Fired before the throw so a
-      // failed run doesn't suppress the signal.
+      const window =
+        (usage as { periodKind?: string }).periodKind === "day"
+          ? "today"
+          : "this month";
+      // Analytics: the upgrade-pressure moment. Fired before the throw so
+      // a failed run doesn't suppress the signal.
       await ctx.runMutation(internal.events.logInternal, {
         userId,
         name: "daily_limit_hit",
-        props: { planId, included: plan.includedConversions },
+        props: { planId, included: plan.includedConversions, window },
       });
       throw new Error(
         `[[UPGRADE:conversions:${planId}]] You've used all ` +
-          `${plan.includedConversions} free conversions this month. ` +
-          `Upgrade for more — and pay-as-you-go after that.`
+          `${plan.includedConversions} free conversions ${window}. ` +
+          (window === "today"
+            ? "Resets at UTC midnight, or upgrade for more right now."
+            : "Upgrade for more — and pay-as-you-go after that.")
       );
     }
     // Paid plan over quota → allowed, will accrue overage. No throw.
@@ -166,7 +208,9 @@ export async function assertCanCreatePreset(
 
 /**
  * Internal metering. Called from runJob ONLY after a conversion completes
- * successfully. Upserts the (user, month) row, incrementing every counter.
+ * successfully. Upserts the (user, period) row, incrementing every counter.
+ * The period is derived from the user's CURRENT plan — a Free user gets a
+ * per-day row, a paid user gets a per-month row.
  */
 export const recordConversion = internalMutation({
   args: {
@@ -181,12 +225,15 @@ export const recordConversion = internalMutation({
     conversions: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const month = monthKey();
+    const planId = await planIdForUser(ctx, args.userId);
+    const plan = getPlan(planId);
+    const { period, periodKind } = periodKeyFor(plan);
     const inc = args.conversions ?? 1;
+
     const existing = await ctx.db
       .query("userUsage")
-      .withIndex("by_user_month", (q) =>
-        q.eq("userId", args.userId).eq("month", month)
+      .withIndex("by_user_period", (q) =>
+        q.eq("userId", args.userId).eq("period", period)
       )
       .unique();
 
@@ -201,7 +248,11 @@ export const recordConversion = internalMutation({
     } else {
       await ctx.db.insert("userUsage", {
         userId: args.userId,
-        month,
+        period,
+        periodKind,
+        // Legacy `month` is double-written so the by_user_month index stays
+        // queryable for one deploy cycle. New code never reads it.
+        month: periodKind === "month" ? period : monthKey(),
         conversions: inc,
         groqInputTokens: args.groqInputTokens,
         groqOutputTokens: args.groqOutputTokens,
@@ -256,7 +307,14 @@ export const myUsage = query({
     return {
       planId,
       planName: plan.name,
-      month: usage.month,
+      region: usage.periodKind === "day" ? undefined : undefined,
+      // What time window does this usage row cover? "day" → "YYYY-MM-DD"
+      // (Free; resets at next UTC midnight); "month" → "YYYY-MM" (paid).
+      period: usage.period,
+      periodKind: usage.periodKind,
+      // Kept for backwards compatibility with any caller still reading
+      // `month`. New UI should read `period` + `periodKind`.
+      month: usage.periodKind === "month" ? usage.period : usage.month,
       includedConversions: plan.includedConversions,
       conversions: usage.conversions,
       remaining: Math.max(0, plan.includedConversions - usage.conversions),

@@ -9,7 +9,7 @@ import { PLAN_IDS, getPlan } from "../../../../lib/plans.js";
 export const metadata = {
   title: "Limits & plans — Docs",
   description:
-    "ReFile plan limits: monthly conversions, file size caps, batch sizes, presets, and how pay-as-you-go works.",
+    "ReFile plan limits: daily Free quota, monthly paid quotas, file size caps, batch sizes, presets, and how pay-as-you-go works.",
   alternates: { canonical: absoluteUrl("/docs/limits-and-plans") },
 };
 
@@ -38,7 +38,7 @@ export default function Page() {
               <tr className="border-b border-border text-left text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Plan</th>
                 <th className="py-2 pr-3 font-medium">Price</th>
-                <th className="py-2 pr-3 font-medium">Conversions/mo</th>
+                <th className="py-2 pr-3 font-medium">Conversions</th>
                 <th className="py-2 pr-3 font-medium">Max file</th>
                 <th className="py-2 pr-3 font-medium">Batch</th>
                 <th className="py-2 font-medium">Presets</th>
@@ -58,7 +58,11 @@ export default function Page() {
                   </td>
                   <td className="py-2.5 pr-3">
                     {p.includedConversions.toLocaleString()}
-                    {p.overagePerConversion == null ? " (hard cap)" : ""}
+                    {p.quotaPeriod === "day"
+                      ? " / day (hard cap, UTC reset)"
+                      : p.overagePerConversion == null
+                        ? " / mo (hard cap)"
+                        : " / mo"}
                   </td>
                   <td className="py-2.5 pr-3">{sizeLabel(p.maxFileBytes)}</td>
                   <td className="py-2.5 pr-3">{p.maxFilesPerConversion}</td>
@@ -89,8 +93,8 @@ export default function Page() {
           On Student, Pro, and Power you get a monthly included amount.
           Beyond that, each extra successful conversion is{" "}
           <strong>$0.02</strong>, billed at the end of the month. The Free
-          plan has no overage — it stops at its cap until the next month or
-          an upgrade.
+          plan resets daily at UTC midnight — it stops at its 10/day cap
+          until the next reset or an upgrade, with no overage.
         </p>
       </DocSection>
 

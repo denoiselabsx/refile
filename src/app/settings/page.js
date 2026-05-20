@@ -132,7 +132,7 @@ export default function SettingsPage() {
                     <p className="text-[13px] text-muted-foreground">
                       {usage.conversions.toLocaleString()} /{" "}
                       {usage.includedConversions.toLocaleString()} conversions
-                      used
+                      used {usage.periodKind === "day" ? "today" : "this month"}
                     </p>
                   </div>
                   <Link

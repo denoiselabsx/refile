@@ -42,10 +42,14 @@ function buildTiers(region) {
   const plans = plansForRegion(region);
   return PLAN_IDS.map((id) => {
     const p = plans[id];
+    const quotaLine =
+      p.quotaPeriod === "day"
+        ? `${p.includedConversions} conversions / day (resets at UTC midnight)`
+        : p.overagePerConversion == null
+          ? `${p.includedConversions} conversions / month (hard limit)`
+          : `${p.includedConversions} conversions / month included`;
     const features = [
-      p.overagePerConversion == null
-        ? `${p.includedConversions} conversions / month (hard limit)`
-        : `${p.includedConversions} conversions / month included`,
+      quotaLine,
       p.overagePerConversion != null
         ? `Then $${p.overagePerConversion.toFixed(2)} per extra conversion`
         : "No overage — upgrade for more",
