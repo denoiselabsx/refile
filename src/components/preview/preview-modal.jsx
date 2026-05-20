@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { downloadFile } from "@/lib/download-file";
 
 export function PreviewModal({ open, onOpenChange, filename, url, children }) {
   return (
@@ -32,16 +33,19 @@ export function PreviewModal({ open, onOpenChange, filename, url, children }) {
             </DialogDescription>
           </div>
           {url ? (
-            <a
-              href={url}
-              download={filename}
-              target="_blank"
-              rel="noopener noreferrer"
+            // Route the download through the same force-save helper used
+            // elsewhere — the native `<a download>` attribute is ignored
+            // across origins (Convex storage is on another host), which
+            // is why this button used to open the file in a new tab
+            // instead of saving it.
+            <button
+              type="button"
+              onClick={() => downloadFile(url, filename)}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
             >
               <Download className="size-3.5" />
               Download
-            </a>
+            </button>
           ) : (
             <button
               type="button"

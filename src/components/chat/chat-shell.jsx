@@ -403,6 +403,34 @@ export function ChatShell({ chatId = null }) {
   const turns = chatData?.turns ?? [];
   const chat = chatData?.chat ?? null;
 
+  // Mobile haptic on conversion completion. We watch the set of turn ids
+  // whose status is "completed" and vibrate once whenever a new id joins
+  // — first paint after navigation seeds the set without vibrating, so
+  // historical completions don't buzz when you open an old chat.
+  const completedRef = useRef(null);
+  useEffect(() => {
+    if (!turns.length) return;
+    const completed = new Set(
+      turns.filter((t) => t.status === "completed").map((t) => t._id)
+    );
+    if (completedRef.current === null) {
+      completedRef.current = completed;
+      return;
+    }
+    let added = false;
+    for (const id of completed) {
+      if (!completedRef.current.has(id)) {
+        added = true;
+        break;
+      }
+    }
+    completedRef.current = completed;
+    if (added && typeof navigator !== "undefined" && navigator.vibrate) {
+      // Short double-tap pattern — distinctly "yes, done" not just noise.
+      navigator.vibrate([20, 40, 20]);
+    }
+  }, [turns]);
+
   const historyPanel = (
     <>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3 sm:px-4">
@@ -605,9 +633,14 @@ export function ChatShell({ chatId = null }) {
           Upload files
         </Button>
       </div>
-      <div
+      {/* Wrap as a button so the entire dashed area is a tap target on
+          mobile (drag-and-drop is a no-op there). On sm+ where dragging
+          works, the click handler is still fine — same end result. */}
+      <button
+        type="button"
+        onClick={() => uploadsInputRef.current?.click()}
         className={cn(
-          "m-2 rounded-lg border border-dashed border-border p-3 text-center text-[11.5px] text-muted-foreground transition-colors",
+          "m-2 block w-[calc(100%-1rem)] rounded-lg border border-dashed border-border p-3 text-center text-[11.5px] text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/30",
           uploadsDragActive && "border-foreground/40 bg-muted/40",
         )}
         onDragOver={(e) => {
@@ -624,8 +657,12 @@ export function ChatShell({ chatId = null }) {
           handleUploadFiles(e.dataTransfer.files);
         }}
       >
-        Drop files here to upload
-      </div>
+        {/* Two copy variants: drop-and-drop on desktop, tap-to-pick on
+            mobile. Tailwind's `sm:` breakpoint matches the same pivot
+            we use elsewhere (touch vs. cursor input). */}
+        <span className="sm:hidden">Tap to select files (or use the camera)</span>
+        <span className="hidden sm:inline">Drop files here, or click to upload</span>
+      </button>
 
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">

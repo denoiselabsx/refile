@@ -212,7 +212,9 @@ export function Composer({
               onClick={onOpenUploads}
               aria-label="Attach files"
               title="Attach files"
-              className="inline-flex h-9 items-center gap-2 rounded-full px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]"
+              // 44px on mobile (Apple HIG / Material minimum touch target),
+              // 36px on sm+ where the cursor takes over and density wins.
+              className="inline-flex h-11 items-center gap-2 rounded-full px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97] sm:h-9"
             >
               <Paperclip className="size-[18px]" />
               <span className="hidden sm:inline">Attach</span>
@@ -225,7 +227,9 @@ export function Composer({
           disabled={!canSend}
           aria-label="Send"
           loading={isBusy}
-          className="size-9 rounded-full"
+          // Same touch-target story as Attach above. The size className
+          // overrides Button's size="icon" defaults on mobile.
+          className="size-11 rounded-full sm:size-9"
         >
           {!isBusy && <ArrowUp className="size-[18px]" />}
         </Button>
