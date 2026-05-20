@@ -53,7 +53,16 @@ export const get = query({
               }))
             )
           : [];
-        return { ...t, outputUrls };
+        const inputUrls = t.inputStorageIds
+          ? await Promise.all(
+              t.inputStorageIds.map(async (sid, i) => ({
+                storageId: sid,
+                filename: t.inputFilenames?.[i] ?? "input",
+                url: await ctx.storage.getUrl(sid),
+              }))
+            )
+          : [];
+        return { ...t, outputUrls, inputUrls };
       })
     );
 

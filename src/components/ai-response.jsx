@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
   Download,
-  FileDown,
   AlertTriangle,
   Save,
   Loader2,
@@ -18,11 +17,14 @@ import { useAuth } from "@/contexts/auth-context";
 import { useUpgrade } from "@/contexts/upgrade-context";
 import { parseUpgradeError } from "../../lib/upgrade.js";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
+import { FilePreview, PreviewModal } from "@/components/preview";
+import { canPreview } from "@/lib/preview";
 
 export function AIResponse({ prompt }) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { triggerUpgrade } = useUpgrade();
+  const [previewItem, setPreviewItem] = useState(null);
 
   // A chat reply may carry a machine-readable upgrade tag (e.g. a pipeline
   // that exceeds the plan). Open the upsell modal once; the user only ever
@@ -179,13 +181,39 @@ export function AIResponse({ prompt }) {
 
             {prompt.outputUrls?.length > 0 && (
               <ul className="divide-y divide-border/60">
-                {prompt.outputUrls.map((out) => (
+                {prompt.outputUrls.map((out) => {
+                  const previewable = canPreview(out.filename) && !!out.url;
+                  return (
                   <li
                     key={out.storageId}
                     className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <FileDown className="size-4 shrink-0 text-muted-foreground" />
+                      {previewable ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewItem({
+                              filename: out.filename,
+                              url: out.url,
+                            })
+                          }
+                          className="shrink-0 rounded-md transition-opacity hover:opacity-80"
+                          aria-label={`Preview ${out.filename}`}
+                        >
+                          <FilePreview
+                            filename={out.filename}
+                            url={out.url}
+                            mode="inline"
+                          />
+                        </button>
+                      ) : (
+                        <FilePreview
+                          filename={out.filename}
+                          url={out.url}
+                          mode="inline"
+                        />
+                      )}
                       <span
                         className="truncate text-[13px] font-medium text-foreground"
                         title={out.filename}
@@ -206,7 +234,8 @@ export function AIResponse({ prompt }) {
                       </a>
                     )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
 
@@ -226,6 +255,21 @@ export function AIResponse({ prompt }) {
            genuinely-complex requests — every other failure says what's
            actually wrong so the user isn't sent in circles. ── */}
       {isFailed && <FailureCard failureKind={prompt.failureKind} />}
+
+      <PreviewModal
+        open={!!previewItem}
+        onOpenChange={(o) => !o && setPreviewItem(null)}
+        filename={previewItem?.filename}
+        url={previewItem?.url}
+      >
+        {previewItem && (
+          <FilePreview
+            filename={previewItem.filename}
+            url={previewItem.url}
+            mode="modal"
+          />
+        )}
+      </PreviewModal>
     </div>
   );
 }

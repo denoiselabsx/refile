@@ -42,6 +42,8 @@ import { UsageMeter } from "@/components/usage-meter";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { APP_NAV } from "@/lib/nav";
+import { FilePreview, PreviewModal } from "@/components/preview";
+import { canPreview } from "@/lib/preview";
 
 function fileTypeLabel(filename) {
   const parts = filename.split(".");
@@ -67,6 +69,7 @@ export function ChatShell({ chatId = null }) {
   const [uploads, setUploads] = useState([]);
   const [uploading, setUploading] = useState([]);
   const [uploadsDragActive, setUploadsDragActive] = useState(false);
+  const [previewItem, setPreviewItem] = useState(null);
   const scrollRef = useRef(null);
   const uploadsInputRef = useRef(null);
 
@@ -226,8 +229,9 @@ export function ChatShell({ chatId = null }) {
           xhr.onerror = () => reject(new Error("Network error during upload"));
           xhr.send(file);
         });
+        const localUrl = URL.createObjectURL(file);
         upsertFiles([
-          { storageId, filename: file.name, kind: "input", localId },
+          { storageId, filename: file.name, kind: "input", localId, url: localUrl },
         ]);
         setUploading((prev) => prev.filter((u) => u.localId !== localId));
       } catch (err) {
@@ -249,6 +253,7 @@ export function ChatShell({ chatId = null }) {
             storageId: turn.inputStorageIds[i],
             filename: turn.inputFilenames[i],
             kind: "input",
+            url: turn.inputUrls?.[i]?.url ?? null,
           });
         }
       }
@@ -615,46 +620,77 @@ export function ChatShell({ chatId = null }) {
           </div>
         ) : (
           <ul className="space-y-1" aria-label="Uploaded and generated files">
-            {uploads.map((f) => (
+            {uploads.map((f) => {
+              const previewable = canPreview(f.filename) && !!f.url;
+              return (
               <li
                 key={f.storageId || f.filename}
                 className="group rounded-md border border-border bg-card px-2.5 py-2"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span
-                    className="truncate text-mono text-[12px]"
-                    title={f.filename}
-                  >
-                    {f.filename}
-                  </span>
-                  <div className="shrink-0">
-                    <span className="inline-flex rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground group-hover:hidden">
-                      {fileTypeLabel(f.filename)}
+                <div className="flex items-start gap-2">
+                  {previewable ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewItem({ filename: f.filename, url: f.url })
+                      }
+                      className="shrink-0 rounded-md transition-opacity hover:opacity-80"
+                      aria-label={`Preview ${f.filename}`}
+                    >
+                      <FilePreview
+                        filename={f.filename}
+                        url={f.url}
+                        mode="inline"
+                        size="sm"
+                      />
+                    </button>
+                  ) : (
+                    <div className="shrink-0">
+                      <FilePreview
+                        filename={f.filename}
+                        url={f.url}
+                        mode="inline"
+                        size="sm"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-1 min-w-0 items-start justify-between gap-2">
+                    <span
+                      className="truncate text-mono text-[12px]"
+                      title={f.filename}
+                    >
+                      {f.filename}
                     </span>
-                    {f.url ? (
-                      <a
-                        href={f.url}
-                        download={f.filename}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hidden rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground group-hover:inline-flex"
-                        aria-label={`Download ${f.filename}`}
-                        title="Download"
-                      >
-                        <Download className="size-3.5" />
-                      </a>
-                    ) : (
-                      <span
-                        className="hidden rounded p-1 text-muted-foreground/60 group-hover:inline-flex"
-                        title="Download unavailable"
-                      >
-                        <Download className="size-3.5" />
+                    <div className="shrink-0">
+                      <span className="inline-flex rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground group-hover:hidden">
+                        {fileTypeLabel(f.filename)}
                       </span>
-                    )}
+                      {f.url ? (
+                        <a
+                          href={f.url}
+                          download={f.filename}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hidden rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground group-hover:inline-flex"
+                          aria-label={`Download ${f.filename}`}
+                          title="Download"
+                        >
+                          <Download className="size-3.5" />
+                        </a>
+                      ) : (
+                        <span
+                          className="hidden rounded p-1 text-muted-foreground/60 group-hover:inline-flex"
+                          title="Download unavailable"
+                        >
+                          <Download className="size-3.5" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>
@@ -895,6 +931,21 @@ export function ChatShell({ chatId = null }) {
           </div>
         </div>
       </div>
+
+      <PreviewModal
+        open={!!previewItem}
+        onOpenChange={(o) => !o && setPreviewItem(null)}
+        filename={previewItem?.filename}
+        url={previewItem?.url}
+      >
+        {previewItem && (
+          <FilePreview
+            filename={previewItem.filename}
+            url={previewItem.url}
+            mode="modal"
+          />
+        )}
+      </PreviewModal>
     </AppShell>
   );
 }
