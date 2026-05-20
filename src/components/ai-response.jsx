@@ -254,7 +254,12 @@ export function AIResponse({ prompt }) {
            logs/commands. The old "too much in one shot" text is ONLY for
            genuinely-complex requests — every other failure says what's
            actually wrong so the user isn't sent in circles. ── */}
-      {isFailed && <FailureCard failureKind={prompt.failureKind} />}
+      {isFailed && (
+        <FailureCard
+          failureKind={prompt.failureKind}
+          promptId={prompt._id}
+        />
+      )}
 
       <PreviewModal
         open={!!previewItem}

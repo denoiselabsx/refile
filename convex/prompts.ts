@@ -46,6 +46,49 @@ export const listMine = query({
   },
 });
 
+/**
+ * Admin-only failure inspector. Returns the FULL prompt row — including
+ * the raw command, sandbox logs, and errorMessage — for a specific id.
+ * Regular `get` and `listMine` deliberately scrub those (hide-tool-
+ * internals), so this is the only path that surfaces them.
+ *
+ * Used by the chat UI's "View logs (admin)" disclosure on failed turns
+ * so live ad-hoc triage doesn't require Convex dashboard spelunking.
+ */
+export const adminDebug = query({
+  args: { id: v.id("prompts") },
+  handler: async (ctx, { id }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const role = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    if (role?.role !== "admin") return null;
+    const row = await ctx.db.get(id);
+    if (!row) return null;
+    // Surface the raw fields. The browser only renders this in the
+    // admin-gated FailureCard branch, and the query itself is gated,
+    // so non-admins can't read this even by guessing prompt ids.
+    return {
+      _id: row._id,
+      prompt: row.prompt,
+      inputFilenames: row.inputFilenames,
+      status: row.status,
+      failureKind: row.failureKind,
+      aiKind: row.aiKind,
+      aiTool: row.aiTool,
+      aiCommand: row.aiCommand,
+      aiDescription: row.aiDescription,
+      aiInputFiles: row.aiInputFiles,
+      aiOutputFiles: row.aiOutputFiles,
+      sandboxLogs: row.sandboxLogs,
+      errorMessage: row.errorMessage,
+      pipelineSteps: row.pipelineSteps,
+    };
+  },
+});
+
 export const get = query({
   args: { id: v.id("prompts") },
   handler: async (ctx, { id }) => {
@@ -126,23 +169,71 @@ export const submit = mutation({
       .collect();
     const turnIndex = existingTurns.length;
 
-    // Auto-chain: if no new uploads were provided AND we have a prior successful
-    // turn, reuse the previous turn's outputs as this turn's inputs.
+    // File resolution for this turn, in priority order:
+    //   1. Files attached to THIS submit call (explicit upload).
+    //   2. A file the user named literally in their prompt that exists
+    //      in the chat's existing uploads (input or prior output). This
+    //      stops the auto-chain from silently using x_resized.png when
+    //      the user clearly typed "Screenshot from 2026-05-20…png".
+    //   3. Auto-chain: the previous successful turn's outputs (legacy
+    //      "make it smaller" follow-up behavior).
     let inputStorageIds = args.inputStorageIds;
     let inputFilenames = args.inputFilenames.map(sanitizeFilename);
+    let autoChained = false;
 
     if (inputStorageIds.length === 0 && existingTurns.length > 0) {
-      const lastWithOutputs = [...existingTurns]
-        .sort((a, b) => (b.turnIndex ?? 0) - (a.turnIndex ?? 0))
-        .find(
-          (t) =>
-            t.status === "completed" &&
-            (t.outputStorageIds?.length ?? 0) > 0 &&
-            (t.outputFilenames?.length ?? 0) > 0
-        );
-      if (lastWithOutputs) {
-        inputStorageIds = lastWithOutputs.outputStorageIds!;
-        inputFilenames = lastWithOutputs.outputFilenames!.map(sanitizeFilename);
+      // Collect every (storageId, filename) pair this chat has seen so we
+      // can match a filename literally typed in the prompt against it.
+      // Inputs come straight from each turn's inputStorageIds; outputs
+      // from outputStorageIds. We dedupe by storageId.
+      const seen = new Map<string, string>(); // storageId -> filename
+      for (const t of existingTurns) {
+        for (let i = 0; i < (t.inputStorageIds?.length ?? 0); i++) {
+          const sid = t.inputStorageIds[i] as unknown as string;
+          if (!seen.has(sid)) seen.set(sid, t.inputFilenames?.[i] ?? "file");
+        }
+        for (let i = 0; i < (t.outputStorageIds?.length ?? 0); i++) {
+          const sid = t.outputStorageIds![i] as unknown as string;
+          if (!seen.has(sid)) seen.set(sid, t.outputFilenames?.[i] ?? "file");
+        }
+      }
+
+      // Match by literal substring. We don't want to do anything clever
+      // here — if the user wrote `screenshot from 2026-05-20`, we check
+      // whether any known filename (case-insensitive) contains that
+      // exact substring after normalizing spaces ↔ underscores. This
+      // handles the very common case of the user typing the displayed
+      // filename verbatim instead of with @-mention.
+      const promptNorm = args.prompt.toLowerCase().replace(/[_\s]+/g, " ");
+      const matched: Array<{ sid: string; name: string }> = [];
+      for (const [sid, name] of seen.entries()) {
+        const nameNorm = name.toLowerCase().replace(/[_\s]+/g, " ");
+        // Require at least 6 chars to match so two-letter overlaps
+        // (e.g. "to") don't trigger.
+        if (nameNorm.length >= 6 && promptNorm.includes(nameNorm)) {
+          matched.push({ sid, name });
+        }
+      }
+      if (matched.length > 0) {
+        inputStorageIds = matched.map((m) => m.sid) as unknown as typeof inputStorageIds;
+        inputFilenames = matched.map((m) => sanitizeFilename(m.name));
+      } else {
+        // Fall back to the original auto-chain behavior.
+        const lastWithOutputs = [...existingTurns]
+          .sort((a, b) => (b.turnIndex ?? 0) - (a.turnIndex ?? 0))
+          .find(
+            (t) =>
+              t.status === "completed" &&
+              (t.outputStorageIds?.length ?? 0) > 0 &&
+              (t.outputFilenames?.length ?? 0) > 0
+          );
+        if (lastWithOutputs) {
+          inputStorageIds = lastWithOutputs.outputStorageIds!;
+          inputFilenames = lastWithOutputs.outputFilenames!.map(
+            sanitizeFilename
+          );
+          autoChained = true;
+        }
       }
     }
 
@@ -182,12 +273,10 @@ export const submit = mutation({
     // Bump the chat's lastActivity so it sorts to the top.
     await ctx.db.patch(chatId, { lastActivity: Date.now() });
 
-    // Analytics: conversion started. Also flag follow_up_used when this
-    // turn auto-chained (no new uploads + reused previous outputs) — that
-    // signals genuine conversational refinement, distinct from the first
-    // turn of a chat.
-    const isFollowUp =
-      args.inputStorageIds.length === 0 && inputStorageIds.length > 0;
+    // Analytics: conversion started. follow_up_used fires only when the
+    // turn genuinely auto-chained from previous outputs — not when we
+    // matched by filename, since that's just "the user picked a file".
+    const isFollowUp = autoChained;
     await ctx.runMutation(internal.events.logInternal, {
       userId,
       name: "conversion_started",
