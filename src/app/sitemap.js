@@ -3,6 +3,7 @@ import { api } from "../../convex/_generated/api";
 import { SITE_URL } from "@/lib/site";
 import { HIDE_LAUNCH_FEATURES } from "@/lib/nav";
 import { DOCS_PAGES, docsHref } from "../../lib/docs-nav.js";
+import { CONVERSIONS } from "@/lib/conversions";
 
 const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -40,7 +41,21 @@ export default async function sitemap() {
     { url: `${SITE_URL}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/security`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    // Master index for every conversion landing page — high priority
+    // because it's the natural crawl entry-point that fans out to all
+    // /convert/* leaves.
+    { url: `${SITE_URL}/formats`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
   ];
+
+  // SEO landing pages: one entry per hand-tuned conversion in
+  // src/lib/conversions.js. Each is a stable URL with unique copy +
+  // FAQ JSON-LD, so we want Google indexing every one.
+  const conversionEntries = CONVERSIONS.map((c) => ({
+    url: `${SITE_URL}/convert/${c.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
 
   const presets = HIDE_LAUNCH_FEATURES ? [] : await fetchPublicPresets();
   const presetEntries = presets.map((p) => ({
@@ -52,5 +67,5 @@ export default async function sitemap() {
     priority: 0.6,
   }));
 
-  return [...staticEntries, ...presetEntries];
+  return [...staticEntries, ...conversionEntries, ...presetEntries];
 }

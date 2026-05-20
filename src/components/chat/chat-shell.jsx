@@ -96,8 +96,11 @@ export function ChatShell({ chatId = null }) {
 
   useEffect(() => setMounted(true), []);
 
-  // If the user arrived from "Use preset" on a preset detail page, pull the
-  // draft prompt out of sessionStorage and seed the composer with it.
+  // If the user arrived from "Use preset" on a preset detail page OR from
+  // a /convert/* SEO landing page, pull the draft prompt out of
+  // sessionStorage and seed the composer with it. The landing page also
+  // sets ?wantFile=1 on the URL — when present, auto-open the Uploads
+  // panel so the user can drop the file immediately.
   useEffect(() => {
     if (chatId) return; // only on the new-chat surface
     try {
@@ -107,6 +110,10 @@ export function ChatShell({ chatId = null }) {
         sessionStorage.removeItem("chat_prompt_draft");
       }
     } catch {}
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("wantFile") === "1") setUploadsOpen(true);
+    }
   }, [chatId]);
   const isDark = mounted && (resolvedTheme || theme) === "dark";
 
