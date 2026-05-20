@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
-  ShieldCheck,
   Check,
   X,
   Undo2,
@@ -11,10 +10,8 @@ import {
   AlertTriangle,
   MessageSquare,
   Sparkles,
-  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AdminShell } from "@/components/admin/admin-shell";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../../convex/_generated/api";
 
@@ -161,11 +159,12 @@ function LessonCard({ lesson, onAction, busy }) {
 }
 
 export default function AdminLessonsPage() {
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  // Only query the admin list once we believe we're an admin — the query
-  // throws "Admin only." otherwise and would surface as an error.
+  // AdminShell handles loading/non-admin states + claim flow. The query
+  // skips while we don't yet believe we're admin so the server-side gate
+  // never 403s during that window.
   const lessons = useQuery(
     api.learnedLessons.listForReview,
     isAdmin ? {} : "skip"
@@ -174,10 +173,8 @@ export default function AdminLessonsPage() {
   const approve = useMutation(api.learnedLessons.approve);
   const reject = useMutation(api.learnedLessons.reject);
   const unapprove = useMutation(api.learnedLessons.unapprove);
-  const claimAdmin = useMutation(api.users.claimAdmin);
 
   const [busyId, setBusyId] = useState(null);
-  const [claiming, setClaiming] = useState(false);
 
   async function handleAction(kind, id) {
     setBusyId(id);
@@ -199,63 +196,6 @@ export default function AdminLessonsPage() {
     }
   }
 
-  async function handleClaimAdmin() {
-    setClaiming(true);
-    try {
-      await claimAdmin({});
-      toast.success("You're now an admin. Reloading…");
-      setTimeout(() => window.location.reload(), 600);
-    } catch (err) {
-      toast.error(err?.message ?? "Not on the admin allowlist.");
-    } finally {
-      setClaiming(false);
-    }
-  }
-
-  // ── Loading auth ────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <AppShell>
-        <div className="mx-auto max-w-3xl px-5 py-10">
-          <Skeleton className="h-9 w-64" />
-          <Skeleton className="mt-3 h-4 w-96" />
-          <div className="mt-8 space-y-4">
-            <Skeleton className="h-40 w-full rounded-lg" />
-            <Skeleton className="h-40 w-full rounded-lg" />
-          </div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  // ── Not an admin ────────────────────────────────────────────────
-  if (!isAdmin) {
-    return (
-      <AppShell>
-        <div className="mx-auto max-w-3xl px-5 py-10">
-          <EmptyState
-            icon={Lock}
-            title="Admin access required"
-            description={
-              user
-                ? `Signed in as ${user.email ?? "your account"}. If your email is on the admin allowlist, claim access below.`
-                : "Sign in with an allowlisted account to review learned fixes."
-            }
-          />
-          {user ? (
-            <div className="mt-6 flex justify-center">
-              <Button onClick={handleClaimAdmin} disabled={claiming}>
-                <ShieldCheck className="mr-1.5 h-4 w-4" />
-                {claiming ? "Claiming…" : "Claim admin access"}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      </AppShell>
-    );
-  }
-
-  // ── Admin: review queue ─────────────────────────────────────────
   const loadingList = lessons === undefined;
   const pending = (lessons ?? []).filter(
     (l) => l.status === "pending" || l.status === "superseded"
@@ -265,23 +205,13 @@ export default function AdminLessonsPage() {
   );
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-3xl px-5 py-10">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Learned fixes
-          </h1>
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Prompt-fix lessons the failure-review cron distilled from clustered
-          job failures. Approving one appends it to the command-generation
-          prompt for every future job. The hand-written system prompt is never
-          modified — these are additive and reversible.
-        </p>
-
+    <AdminShell
+      title="Learned lessons"
+      description="Prompt-fix proposals from clustered failures. Approving injects the lesson into the system prompt; rejecting drops it."
+    >
+      <div className="max-w-3xl">
         {loadingList ? (
-          <div className="mt-8 space-y-4">
+          <div className="mt-2 space-y-4">
             <Skeleton className="h-40 w-full rounded-lg" />
             <Skeleton className="h-40 w-full rounded-lg" />
           </div>
@@ -337,6 +267,6 @@ export default function AdminLessonsPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </AdminShell>
   );
 }

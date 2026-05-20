@@ -2,11 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
-import { Lock, BarChart3, TrendingUp, Users, AlertTriangle } from "lucide-react";
-import { AppShell } from "@/components/shell/app-shell";
+import { BarChart3, TrendingUp, Users, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
+import { AdminShell } from "@/components/admin/admin-shell";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../../convex/_generated/api";
 import { EVENT_NAMES, EVENT_LABELS } from "../../../../lib/analytics-events.js";
@@ -150,11 +149,13 @@ function statUnique(rollupRows, todayRows, name) {
 }
 
 export default function AdminAnalyticsPage() {
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [days, setDays] = useState(30);
   const [explorerName, setExplorerName] = useState("conversion_completed");
 
+  // AdminShell handles the loading + non-admin states. Queries below skip
+  // when isAdmin is false so they don't 403 during that window.
   const rollup = useQuery(
     api.events.adminRollup,
     isAdmin ? { days } : "skip"
@@ -164,37 +165,6 @@ export default function AdminAnalyticsPage() {
     api.events.adminRecentByName,
     isAdmin ? { name: explorerName, limit: 100 } : "skip"
   );
-
-  if (isLoading) {
-    return (
-      <AppShell>
-        <div className="mx-auto max-w-5xl px-5 py-10">
-          <Skeleton className="h-9 w-64" />
-          <Skeleton className="mt-3 h-4 w-96" />
-          <div className="mt-8 grid gap-4 md:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-24 rounded-lg" />
-            ))}
-          </div>
-          <Skeleton className="mt-6 h-72 w-full rounded-lg" />
-        </div>
-      </AppShell>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <AppShell>
-        <div className="mx-auto max-w-3xl px-5 py-10">
-          <EmptyState
-            icon={Lock}
-            title="Admin access required"
-            description="Sign in with an allowlisted account to view analytics."
-          />
-        </div>
-      </AppShell>
-    );
-  }
 
   const rollupRows = rollup ?? [];
   const todayRows = today ?? [];
@@ -222,34 +192,31 @@ export default function AdminAnalyticsPage() {
     totalStarted > 0 ? Math.round((totalCompleted / totalStarted) * 100) : 0;
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-5xl px-5 py-10">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="font-serif text-3xl text-foreground">Analytics</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Last {days} days. Rollup runs 00:30 UTC; today's column is live.
-            </p>
-          </div>
-          <div className="flex rounded-md border border-border bg-background p-0.5">
-            {RANGE_OPTIONS.map((r) => (
-              <button
-                key={r.value}
-                onClick={() => setDays(r.value)}
-                className={`px-3 py-1 text-xs font-medium transition-colors ${
-                  days === r.value
-                    ? "rounded-sm bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+    <AdminShell
+      title="Analytics"
+      description={`Last ${days} days. Rollup runs 00:30 UTC; today's column is live.`}
+    >
+      <div className="-mt-2 mb-4 flex justify-end">
+        <div className="flex rounded-md border border-border bg-background p-0.5">
+          {RANGE_OPTIONS.map((r) => (
+            <button
+              key={r.value}
+              onClick={() => setDays(r.value)}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${
+                days === r.value
+                  ? "rounded-sm bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
         </div>
+      </div>
 
+      <div>
         {/* Stat cards */}
-        <div className="mt-8 grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-4">
           <StatCard
             icon={BarChart3}
             label="Conversions started"
@@ -357,7 +324,7 @@ export default function AdminAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </AdminShell>
   );
 }
 
