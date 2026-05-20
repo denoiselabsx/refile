@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { headers } from "next/headers";
-import { Check } from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 
 import { Spotlight } from "@/components/spotlight";
@@ -172,6 +173,59 @@ export default async function PricingPage() {
           ))}
         </div>
 
+        {/* Developer API — pay-as-you-go, sits below the 4-tier grid. */}
+        <Spotlight className="surface mt-10 flex flex-col gap-6 p-7 md:flex-row md:items-start md:justify-between md:p-9">
+          <div className="max-w-xl">
+            <Badge variant="outline" className="rounded-full">
+              For developers
+            </Badge>
+            <h2 className="mt-4 font-serif text-[26px] leading-tight text-foreground sm:text-[30px]">
+              Developer API
+            </h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
+              Build ReFile into your own product. Pay-as-you-go pricing — no
+              minimum, no monthly commitment. Free to try.
+            </p>
+
+            <ul className="mt-5 space-y-2.5">
+              {API_FEATURES.map((f) => (
+                <li
+                  key={f}
+                  className="flex items-start gap-2 text-[13.5px] leading-relaxed text-foreground/85"
+                >
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-foreground" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <div className="flex items-baseline gap-2">
+              <span className="font-serif text-[44px] leading-none tracking-tight">
+                $0.05
+              </span>
+              <span className="text-[12px] text-muted-foreground">
+                per job / per pipeline step
+              </span>
+            </div>
+            <Link
+              href="/settings/api"
+              className="cta-shimmer inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-[13.5px] font-medium text-background transition-opacity hover:opacity-90"
+            >
+              Create an API key
+              <ArrowRight className="size-3.5" />
+            </Link>
+            <Link
+              href="/docs/api"
+              className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Read the docs
+              <ArrowRight className="size-3" />
+            </Link>
+          </div>
+        </Spotlight>
+
         {/* FAQ */}
         <div className="mt-20">
           <h2 className="text-h1-serif text-center">
@@ -200,6 +254,13 @@ export default async function PricingPage() {
     </AppShell>
   );
 }
+
+const API_FEATURES = [
+  "$0.05 per job (single tool)",
+  "$0.05 per pipeline step — a 3-step job is $0.15",
+  "Files up to 1 GB",
+  "No quota — usage billed monthly via your payment method on file",
+];
 
 const FAQS = [
   {

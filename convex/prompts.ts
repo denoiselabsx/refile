@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { assertWithinQuota } from "./plans";
@@ -382,6 +382,25 @@ function mapFailureKindToApi(kind: string): { code: string; message: string } {
 }
 
 /* ──────────────────────────────────────────────────────────────── *
+ *  Webhook delivery helper
+ *  Read by convex/webhooks.ts (node action) to learn whether a
+ *  webhook should fire and under whose user identity to fetch the
+ *  sanitized payload. Lives here (not webhooks.ts) because Node-
+ *  runtime files can't define queries.
+ * ──────────────────────────────────────────────────────────────── */
+export const getWebhookDeliveryInfo = internalQuery({
+  args: { promptId: v.id("prompts") },
+  handler: async (ctx, { promptId }) => {
+    const row = await ctx.db.get(promptId);
+    if (!row) return null;
+    return {
+      userId: row.userId,
+      webhookUrl: row.webhookUrl ?? null,
+    };
+  },
+});
+
+/* ──────────────────────────────────────────────────────────────── *
  *  Internal updates from runJob
  * ──────────────────────────────────────────────────────────────── */
 
@@ -407,7 +426,22 @@ export const patchAiResponse = internalMutation({
     ),
   },
   handler: async (ctx, { promptId, ...patch }) => {
+    // Detect a fresh terminal transition (non-terminal → completed/failed)
+    // so we can fire the API webhook exactly once per job. Done by reading
+    // the row BEFORE the patch — `patch.status` may be undefined if this
+    // call is only updating AI metadata, so we must compare prev → next
+    // explicitly.
+    const prev = await ctx.db.get(promptId);
+    const wasTerminal =
+      prev?.status === "completed" || prev?.status === "failed";
     await ctx.db.patch(promptId, patch);
+    const nextStatus = patch.status ?? prev?.status;
+    const isTerminal = nextStatus === "completed" || nextStatus === "failed";
+    if (!wasTerminal && isTerminal && prev?.webhookUrl) {
+      await ctx.scheduler.runAfter(0, internal.webhooks.deliverJobWebhook, {
+        promptId,
+      });
+    }
   },
 });
 
@@ -461,6 +495,17 @@ export const patchExecution = internalMutation({
     ),
   },
   handler: async (ctx, { promptId, ...patch }) => {
+    // Same terminal-transition guard as patchAiResponse — fires the API
+    // webhook exactly once when the row first reaches completed/failed.
+    const prev = await ctx.db.get(promptId);
+    const wasTerminal =
+      prev?.status === "completed" || prev?.status === "failed";
     await ctx.db.patch(promptId, patch);
+    const isTerminal = patch.status === "completed" || patch.status === "failed";
+    if (!wasTerminal && isTerminal && prev?.webhookUrl) {
+      await ctx.scheduler.runAfter(0, internal.webhooks.deliverJobWebhook, {
+        promptId,
+      });
+    }
   },
 });

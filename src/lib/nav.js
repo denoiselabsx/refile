@@ -23,6 +23,7 @@ import {
   Shield,
   FileText,
   Lock,
+  KeyRound,
 } from "lucide-react";
 
 /**
@@ -35,7 +36,7 @@ import {
  */
 export const HIDE_LAUNCH_FEATURES = process.env.NODE_ENV === "production";
 
-const HIDDEN_HREFS = new Set(["/presets", "/workflow"]);
+const HIDDEN_HREFS = new Set(["/presets", "/workflow", "/settings/api"]);
 
 /**
  * True when a nav href points to a feature that's currently hidden in
@@ -69,6 +70,7 @@ export const APP_NAV = [
   { href: "/dashboard", label: "Chat", icon: MessageSquare },
   { href: "/presets", label: "Presets", icon: Layers },
   { href: "/workflow", label: "Workflows", icon: Workflow },
+  { href: "/settings/api", label: "API", icon: KeyRound },
 ].filter((item) => !isHiddenLaunchHref(item.href));
 
 /**

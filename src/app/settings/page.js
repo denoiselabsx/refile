@@ -16,10 +16,12 @@ import {
   Sun,
   Moon,
   Monitor,
+  KeyRound,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
+import { isHiddenLaunchHref } from "@/lib/nav";
 
 function Section({ icon: Icon, title, desc, children }) {
   return (
@@ -209,6 +211,27 @@ export default function SettingsPage() {
               })}
             </div>
           </Section>
+
+          {/* API keys */}
+          {!isHiddenLaunchHref("/settings/api") && (
+            <Link
+              href="/settings/api"
+              className="surface flex w-full items-center gap-3 p-5 text-left transition-colors hover:border-border-strong"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/5 ring-1 ring-border">
+                <KeyRound className="size-4 text-foreground/70" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold text-foreground">
+                  API keys
+                </span>
+                <span className="mt-0.5 block text-[13px] text-muted-foreground">
+                  Create and manage keys for the REST API.
+                </span>
+              </span>
+              <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+            </Link>
+          )}
 
           {/* Data */}
           <Section
