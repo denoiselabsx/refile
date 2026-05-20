@@ -69,7 +69,7 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
             </span>
           </Link>
 
-          {APP_NAV.map((item) => {
+          {[...APP_NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.href);
             return (

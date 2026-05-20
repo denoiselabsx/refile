@@ -62,7 +62,9 @@ export function UsageMeter() {
           <div
             className={cn(
               "h-full rounded-full transition-all",
-              overQuota ? "bg-amber-500" : "bg-foreground"
+              overQuota
+                ? "bg-amber-500 dark:bg-amber-400"
+                : "bg-foreground/80"
             )}
             style={{ width: `${pct}%` }}
           />
