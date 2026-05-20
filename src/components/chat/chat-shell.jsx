@@ -612,16 +612,6 @@ export function ChatShell({ chatId = null }) {
         Drop files here to upload
       </div>
 
-      <input
-        ref={uploadsInputRef}
-        type="file"
-        multiple
-        hidden
-        onChange={(e) => {
-          handleUploadFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {uploading.map((u) => (
@@ -730,6 +720,20 @@ export function ChatShell({ chatId = null }) {
       appSidebarNavExtra={appSidebarExtra}
       appSidebarFooterExtra={appSidebarUsage}
     >
+      {/* Mounted at the AppShell root so the composer paperclip can trigger
+          the OS file picker regardless of whether the uploads panel is
+          expanded — when collapsed, the panel JSX (which used to host this
+          input) is replaced by a sliver button. */}
+      <input
+        ref={uploadsInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          handleUploadFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
       <div
         className={cn(
           "grid h-full min-h-0 grid-cols-1 grid-rows-1 transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
