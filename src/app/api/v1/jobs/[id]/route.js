@@ -60,11 +60,12 @@ export async function GET(request, { params }) {
       userId: auth.userId,
     });
   } catch (err) {
-    // Malformed Convex ids surface as validator errors; treat as 400 so
-    // callers don't confuse "bad id" with "missing job".
     const s = String(err?.message ?? err ?? "");
-    if (s.includes("validator failed") || s.includes('id"') || s.includes("Validator error")) {
-      return withCors(errorResponse("invalid_request", "Job id is malformed", 400));
+    // Convex's v.id() validator rejects any id whose table-tag prefix
+    // doesn't match — so typos and "doesn't exist" are indistinguishable
+    // to the caller. Surface both as 404, which matches REST norms.
+    if (s.includes("ArgumentValidationError") && s.includes(".promptId")) {
+      return withCors(errorResponse("not_found", "Job not found", 404));
     }
     console.error("[api/v1/jobs/:id] getForApi failed:", err);
     return withCors(errorResponse("internal_error", "Could not fetch job", 500));
