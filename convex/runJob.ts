@@ -11,6 +11,12 @@ import { validateCommand } from "./commandValidator";
 import { correctCommand } from "./commandCorrector";
 import { preflightCommand } from "./commandPreflight";
 import { diagnoseError } from "./diagnoseError";
+import {
+  parseCompressionTarget,
+  isCompressionRequest,
+  buildCompressionLadder,
+  formatBytes,
+} from "./compressionTarget";
 import { CONVERSION_EVENT_NAME } from "../lib/polar.js";
 import type { Id } from "./_generated/dataModel";
 
@@ -45,6 +51,21 @@ const MIME_TYPES: Record<string, string> = {
   zip: "application/zip",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  // Document formats whose outputs were previously delivered as
+  // octet-stream — the browser then refused to preview them and some
+  // readers wouldn't open the download. epub especially: a successful
+  // docx→epub conversion is useless if it downloads with no MIME type.
+  epub: "application/epub+zip",
+  rtf: "application/rtf",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  csv: "text/csv",
+  opus: "audio/opus",
+  m4a: "audio/mp4",
+  heic: "image/heic",
+  avif: "image/avif",
 };
 
 function mimeFromFilename(name: string): string {
@@ -347,7 +368,7 @@ const AIResponse = z.object({
     .string()
     .optional()
     .describe(
-      "When kind='command', one short sentence describing the OUTCOME for the end user in plain language. NEVER name a tool, binary, flag, codec, or command (no 'ffmpeg', 'magick', 'libx264', '-crf', etc.). E.g. 'Compressed your video to about half the size', not 'Re-encoded with libx264 CRF 28'."
+      "When kind='command', one short sentence describing the OUTCOME for the end user in plain language. NEVER name a tool, binary, flag, codec, or command (no 'ffmpeg', 'magick', 'libx264', '-crf', etc.). E.g. 'Compressed your video to about half the size', not 'Re-encoded with libx264 CRF 28'. NEVER claim a specific resulting file size or that an exact size target was met — you cannot know the output size before it runs. Say 'Compressed your PDF as much as possible' or 'Made your video smaller', NOT 'Compressed to 1 MB'. The system measures and shows the real size separately."
     ),
   tool: z
     .enum(PIPELINE_TOOLS)
@@ -653,6 +674,16 @@ dimensions and audio-less inputs):
 Heavier video compression (smaller file, slight quality drop):
   ffmpeg -i 'in.mp4' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 28 -preset slower -c:a copy 'out_small.mp4'
 
+# COMPRESSING TO A TARGET SIZE ("under 10 MB", "compress to 5MB"):
+# Do NOT try to compute an exact bitrate yourself — just emit a normal
+# compression command with a sensible CRF (use 28 for "smaller", 32 for
+# "much smaller / aggressive"). The system runs an automatic size-targeting
+# pass AFTER your command: it measures the result and, if it overshoots the
+# requested size, transparently re-compresses harder until it fits or hits
+# the quality floor. So your job is just a reasonable first compression —
+# the exact-size landing is handled for you. Never claim in the description
+# that you hit the exact number.
+
 Re-encode AND transcode audio to AAC (use only when source audio codec
 is incompatible with the target container, e.g. webm → mp4 with Opus):
   ffmpeg -i 'in.webm' -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 128k 'out_h264.mp4'
@@ -805,6 +836,28 @@ Markdown → PDF:
 
 Markdown → DOCX:
   pandoc 'in.md' -o 'out.docx'
+
+# EPUB — Pandoc is the right tool (LibreOffice does NOT export epub well)
+
+DOCX → EPUB (e-book from a Word document):
+  pandoc 'in.docx' -o 'out.epub'
+
+EPUB → DOCX (e-book back to an editable Word document):
+  pandoc 'in.epub' -o 'out.docx'
+
+Markdown / HTML → EPUB:
+  pandoc 'in.md' -o 'out.epub'
+  pandoc 'in.html' -o 'out.epub'
+
+EPUB → PDF:
+  pandoc 'in.epub' -o 'out.pdf'
+
+CAPABILITY HONESTY for EPUB: pandoc converts epub cleanly to/from docx,
+html, markdown, and pdf. There is NO reliable PDF→EPUB path in this
+sandbox (a PDF has fixed-page layout, an epub is reflowable text — the
+conversion is genuinely lossy and often garbled). If asked for PDF→EPUB,
+use kind="chat": say a PDF doesn't convert cleanly to a reflowable
+e-book, and offer the closest thing — PDF → text, or PDF → DOCX — instead.
 
 # IMAGES++ — HEIC/AVIF/WebP/SVG/EXIF
 
@@ -1628,6 +1681,165 @@ export const runJob = internalAction({
       return;
     }
 
+    /* ── Step 2a: iterative compression toward a target size ──────
+     *
+     * When the user asked to compress a SINGLE file to a specific size
+     * ("under 1 MB"), we don't trust the model's one-shot quality knob to
+     * land it. Instead we walk a deterministic ladder of progressively
+     * stronger compression commands and STOP at the first rung whose
+     * output is ≤ the target. If no rung reaches it, the smallest result
+     * is delivered and the UI honestly says "best we could do was X".
+     *
+     * Scope guards keep this narrow and safe:
+     *   - exactly ONE input file (laddering a batch is ambiguous);
+     *   - the prompt is a genuine compression request AND names a size;
+     *   - the file is a kind we have a reliable ladder for.
+     * Anything else falls through to the normal single-command path.
+     *
+     * Billing: the whole laddered job is ONE conversion — the user asked
+     * for one outcome. modalMs accumulates across rungs (real compute).
+     */
+    const compressionTarget =
+      promptDoc.inputStorageIds.length === 1 &&
+      isCompressionRequest(promptDoc.prompt)
+        ? parseCompressionTarget(promptDoc.prompt)
+        : null;
+    const ladderPlan = compressionTarget
+      ? buildCompressionLadder(promptDoc.inputFilenames[0])
+      : { kind: "unknown" as const, rungs: [] };
+
+    if (compressionTarget && ladderPlan.rungs.length > 0) {
+      const inputName = promptDoc.inputFilenames[0];
+      const inputBlob = await ctx.storage.get(promptDoc.inputStorageIds[0]);
+      if (!inputBlob) {
+        await ctx.runMutation(internal.prompts.patchExecution, {
+          promptId,
+          status: "failed",
+          failureKind: "execError",
+          errorMessage: `Missing input ${promptDoc.inputStorageIds[0]}`,
+        });
+        return;
+      }
+      const inputBytes = inputBlob.size;
+      const target = compressionTarget.targetBytes;
+
+      // Best result seen so far across all rungs (smallest output wins
+      // even if none hits the target).
+      let best:
+        | { bytes: Uint8Array; filename: string; logs: string }
+        | null = null;
+      let attempts = 0;
+      let lastLogs = "";
+
+      for (const rung of ladderPlan.rungs) {
+        // Defense-in-depth: the ladder commands are hand-written, but run
+        // them through the same security gate as any other command.
+        const v = validateCommand(rung.command);
+        if (!v.ok) {
+          console.error(
+            `[runJob] compression ladder rung rejected for ${promptId}: ${v.reason}`
+          );
+          continue;
+        }
+        attempts++;
+        try {
+          const r = await runModal(
+            modalCfg,
+            rung.command,
+            [{ filename: inputName, blob: inputBlob }],
+            [rung.output]
+          );
+          modalMs += r.durationMs;
+          lastLogs = r.logs;
+          const out = r.outputs.find(
+            (o) => o.filename === rung.output && o.bytes.byteLength > 0
+          );
+          if (!out) continue; // rung produced nothing usable — try next
+          if (!best || out.bytes.byteLength < best.bytes.byteLength) {
+            best = { bytes: out.bytes, filename: out.filename, logs: r.logs };
+          }
+          // Target reached — stop climbing the ladder.
+          if (out.bytes.byteLength <= target) break;
+        } catch (err) {
+          // A rung failed in the sandbox. Keep climbing — a later rung
+          // may still succeed. Only if EVERY rung fails do we report it.
+          lastLogs =
+            err instanceof StepError ? (err as StepError).logs : String(err);
+          console.log(
+            `[runJob] compression rung ${attempts} failed for ${promptId}: ` +
+              (err instanceof Error ? err.message : String(err))
+          );
+        }
+      }
+
+      if (!best) {
+        // Every rung failed — diagnose from the last logs we saw.
+        const diag = diagnoseError(ladderPlan.kind, lastLogs, undefined);
+        await ctx.runMutation(internal.prompts.patchExecution, {
+          promptId,
+          status: "failed",
+          failureKind: diag.failureKind,
+          failureTitle: diag.userTitle,
+          failureBody: diag.userBody,
+          sandboxLogs: lastLogs.slice(-8000),
+          errorMessage: `Compression ladder produced no usable output. [diag:${diag.cause}]`,
+        });
+        return;
+      }
+
+      const outBytes = best.bytes.byteLength;
+      const targetMet = outBytes <= target;
+      const storageId = await ctx.storage.store(
+        bytesToBlob(best.bytes, mimeFromFilename(best.filename))
+      );
+
+      // Honest outcome copy. NEVER claim the asked-for size — state the
+      // size we actually achieved, and if we missed, say so plainly.
+      const description = targetMet
+        ? `Compressed to ${formatBytes(outBytes)} — within your ${formatBytes(
+            target
+          )} target.`
+        : `Compressed as far as it goes — ${formatBytes(
+            outBytes
+          )}. That's the smallest this file gets without unacceptable quality loss; your ${formatBytes(
+            target
+          )} target wasn't reachable.`;
+
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "completed",
+        outputStorageIds: [storageId] as any,
+        outputFilenames: [best.filename],
+        sandboxLogs: best.logs.slice(-8000),
+        inputSizeBytes: inputBytes,
+        outputSizeBytes: outBytes,
+        compressionTargetBytes: target,
+        compressionTargetMet: targetMet,
+        compressionAttempts: attempts,
+      });
+      // The success header reads from aiDescription — overwrite the
+      // model's guess with the measured, honest line.
+      await ctx.runMutation(internal.prompts.patchAiResponse, {
+        promptId,
+        aiDescription: description,
+        aiOutputFiles: [best.filename],
+      });
+      await meterSuccess(
+        ctx,
+        promptDoc,
+        promptId,
+        groqInputTokens,
+        groqOutputTokens,
+        modalMs
+      );
+      console.log(
+        `[runJob] compression ladder for ${promptId}: ${attempts} attempt(s), ` +
+          `${formatBytes(inputBytes)} → ${formatBytes(outBytes)}, ` +
+          `target ${formatBytes(target)} ${targetMet ? "MET" : "MISSED"}`
+      );
+      return;
+    }
+
     try {
       // Stage inputs from Convex storage.
       const files: Array<{ filename: string; blob: Blob }> = [];
@@ -1678,16 +1890,21 @@ export const runJob = internalAction({
         return;
       }
 
-      // Upload outputs to Convex storage.
+      // Upload outputs to Convex storage. Tally real byte sizes so the
+      // success card can show the honest result size (matters most for
+      // compression, but a measured size is always better than none).
       const outputStorageIds: string[] = [];
       const outputFilenames: string[] = [];
+      let outBytesTotal = 0;
       for (const out of outputs) {
         const storageId = await ctx.storage.store(
           bytesToBlob(out.bytes, mimeFromFilename(out.filename))
         );
         outputStorageIds.push(storageId as string);
         outputFilenames.push(out.filename);
+        outBytesTotal += out.bytes.byteLength;
       }
+      const inBytesTotal = files.reduce((s, f) => s + (f.blob.size || 0), 0);
 
       const succeeded = outputStorageIds.length > 0;
 
@@ -1698,6 +1915,9 @@ export const runJob = internalAction({
         outputStorageIds: outputStorageIds as any,
         outputFilenames,
         sandboxLogs: logs.slice(-8000),
+        ...(succeeded
+          ? { inputSizeBytes: inBytesTotal, outputSizeBytes: outBytesTotal }
+          : {}),
         errorMessage: succeeded
           ? undefined
           : "Command ran but produced no outputs.",

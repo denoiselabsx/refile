@@ -27,6 +27,28 @@ export default function PdfPreview({ url, filename, mode }) {
   const [pageNumber, setPageNumber] = React.useState(1);
   const [errored, setErrored] = React.useState(false);
 
+  // Responsive page width. The modal previously hardcoded width={720},
+  // which overflows hard on a ~360px phone (the user complaint: "PDF
+  // doesn't render properly on mobile"). Measure the scroll container and
+  // render the page at its inner width, capped at 720 for big screens.
+  const containerRef = React.useRef(null);
+  const [pageWidth, setPageWidth] = React.useState(null);
+
+  React.useEffect(() => {
+    if (mode !== "modal") return;
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      // Subtract the container's horizontal padding (p-4 = 16px each side).
+      const inner = el.clientWidth - 32;
+      if (inner > 0) setPageWidth(Math.min(Math.max(inner, 180), 720));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mode]);
+
   if (mode === "modal") {
     if (errored) {
       return (
@@ -76,7 +98,10 @@ export default function PdfPreview({ url, filename, mode }) {
             </button>
           </div>
         </div>
-        <div className="flex max-h-[70vh] w-full justify-center overflow-auto rounded-lg border border-border bg-muted/20 p-4">
+        <div
+          ref={containerRef}
+          className="flex max-h-[70vh] w-full justify-center overflow-auto rounded-lg border border-border bg-muted/20 p-4"
+        >
           <Document
             file={url}
             onLoadSuccess={({ numPages: n }) => setNumPages(n)}
@@ -88,12 +113,16 @@ export default function PdfPreview({ url, filename, mode }) {
             }
             error={null}
           >
-            <Page
-              pageNumber={pageNumber}
-              width={720}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-            />
+            {/* Render only once we've measured — avoids a 720px flash that
+                overflows the phone viewport before the observer fires. */}
+            {pageWidth != null && (
+              <Page
+                pageNumber={pageNumber}
+                width={pageWidth}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+              />
+            )}
           </Document>
         </div>
       </div>

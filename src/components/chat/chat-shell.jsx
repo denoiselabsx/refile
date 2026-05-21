@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { Composer } from "@/components/composer";
 import { QuickActions } from "@/components/quick-actions";
+import { QuickConvert } from "@/components/quick-convert";
 import { ShareButton } from "@/components/share-button";
 import { downloadFile } from "@/lib/download-file";
 import { AIResponse } from "@/components/ai-response";
@@ -1165,7 +1166,16 @@ export function ChatShell({ chatId = null }) {
           >
             <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
               {!inExistingChat ? (
-                <WelcomeState firstName={firstName} />
+                <WelcomeState
+                  firstName={firstName}
+                  onQuickPick={(promptText) => {
+                    // Seed the composer, then open Uploads so the user's
+                    // next action is dropping a file — tap → drop → send,
+                    // no typing. Mirrors the chat_prompt_draft seam.
+                    setInitialPrompt(promptText);
+                    openUploads();
+                  }}
+                />
               ) : chatData === undefined ? (
                 <div className="space-y-6">
                   <Skeleton className="h-3 w-3/4" />
@@ -1250,13 +1260,7 @@ export function ChatShell({ chatId = null }) {
   );
 }
 
-function WelcomeState({ firstName }) {
-  const suggestions = [
-    "Extract audio from this video as 192 kbps MP3",
-    "Resize these images to 1080p, save as WebP",
-    "Merge these PDFs and compress under 2 MB",
-    "Convert this MP4 to a 1080p H.264 video",
-  ];
+function WelcomeState({ firstName, onQuickPick }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -1273,21 +1277,16 @@ function WelcomeState({ firstName }) {
             Hi {firstName} — what are we converting?
           </h2>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground sm:text-[14px]">
-            Drop files anywhere on this page, then describe the outcome.
+            Pick a quick convert below, or drop a file and describe the
+            outcome in your own words.
           </p>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-2 sm:mt-8 sm:grid-cols-2">
-        {suggestions.map((s) => (
-          <div
-            key={s}
-            className="surface px-4 py-3 text-[13px] leading-relaxed text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
-          >
-            “{s}”
-          </div>
-        ))}
-      </div>
+      {/* Quick-convert grid — the low-friction fast lane. Tapping a tile
+          seeds the prompt and opens Uploads, so the flow is tap → drop →
+          send with no typing. The composer below stays for free-form. */}
+      <QuickConvert onPick={onQuickPick} />
     </motion.div>
   );
 }

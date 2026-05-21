@@ -10,6 +10,8 @@ import {
   Loader2,
   Circle,
   RotateCw,
+  Minimize2,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -71,6 +73,12 @@ export function AIResponse({ prompt }) {
 
   const pipelineSteps = prompt.pipelineSteps;
   const hasPipeline = pipelineSteps?.length > 0;
+
+  // Honest size summary. When the server measured input/output bytes we
+  // show the real result size — never the AI's optimistic guess. For a
+  // compression job that named a target ("under 1 MB"), we also say
+  // plainly whether that target was actually reached.
+  const sizeSummary = buildSizeSummary(prompt);
 
   return (
     <div className="space-y-3">
@@ -165,7 +173,9 @@ export function AIResponse({ prompt }) {
                   {prompt.outputUrls?.length
                     ? `${prompt.outputUrls.length} file${
                         prompt.outputUrls.length === 1 ? "" : "s"
-                      } ready to download`
+                      } ready to download${
+                        sizeSummary?.headline ? ` · ${sizeSummary.headline}` : ""
+                      }`
                     : "Completed earlier — files have since expired"}
                 </p>
               </div>
@@ -205,6 +215,48 @@ export function AIResponse({ prompt }) {
               </div>
             </div>
 
+            {/* Before → after size bar. Users explicitly asked to see the
+                size change spelled out ("compressed from 23 MB to 4.5 MB").
+                Shown whenever the file genuinely got smaller. */}
+            {sizeSummary?.reduction && (
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border/60 bg-muted/30 px-4 py-2.5">
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-foreground">
+                  <Minimize2 className="size-3.5 shrink-0 text-success" />
+                  <span className="text-muted-foreground line-through">
+                    {sizeSummary.reduction.before}
+                  </span>
+                  <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+                  <span>{sizeSummary.reduction.after}</span>
+                </span>
+                {sizeSummary.reduction.percent > 0 && (
+                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+                    {sizeSummary.reduction.percent}% smaller
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Honest compression-target note. Shown when the user asked
+                for a specific size: a calm confirmation when we hit it,
+                and a plain, non-defensive explanation when we couldn't —
+                the user explicitly asked us to "convey it properly". */}
+            {sizeSummary?.targetNote && (
+              <div
+                className={`flex items-start gap-2 border-b border-border/60 px-4 py-2.5 text-[12px] leading-relaxed ${
+                  sizeSummary.targetMet
+                    ? "text-muted-foreground"
+                    : "text-foreground/80"
+                }`}
+              >
+                {sizeSummary.targetMet ? (
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-success" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+                )}
+                <span>{sizeSummary.targetNote}</span>
+              </div>
+            )}
+
             {prompt.outputUrls?.length > 0 && (
               <ul className="divide-y divide-border/60">
                 {prompt.outputUrls.map((out) => {
@@ -240,11 +292,18 @@ export function AIResponse({ prompt }) {
                           mode="inline"
                         />
                       )}
-                      <span
-                        className="truncate text-[13px] font-medium text-foreground"
-                        title={out.filename}
-                      >
-                        {out.filename}
+                      <span className="min-w-0">
+                        <span
+                          className="block truncate text-[13px] font-medium text-foreground"
+                          title={out.filename}
+                        >
+                          {out.filename}
+                        </span>
+                        {typeof out.size === "number" && out.size > 0 && (
+                          <span className="block text-[11px] text-muted-foreground">
+                            {formatFileSize(out.size)}
+                          </span>
+                        )}
                       </span>
                     </div>
                     {out.url && (
@@ -311,6 +370,67 @@ export function AIResponse({ prompt }) {
       </PreviewModal>
     </div>
   );
+}
+
+/** Human-readable byte size — binary units, one decimal under 10. */
+function formatFileSize(bytes) {
+  if (typeof bytes !== "number" || !isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+/**
+ * Build the honest size summary shown on a completed turn.
+ *
+ *  - `reduction` — present only when the file genuinely got smaller. Holds
+ *    `before` / `after` (formatted, e.g. "23 MB" → "4.5 MB") and the
+ *    `percent` saved. Rendered as a dedicated, visible before→after bar —
+ *    users explicitly asked to see "compressed from X MB to Y KB".
+ *  - `headline` — a compact result size for the sub-line when there was
+ *    no real reduction (a plain conversion still gets an honest size).
+ *  - `targetNote` / `targetMet` — present only for a compression job that
+ *    named a target size. States plainly whether the target was reached.
+ *
+ * Returns null when the server recorded no sizes (older rows, chat turns).
+ */
+function buildSizeSummary(prompt) {
+  const out = prompt?.outputSizeBytes;
+  const inp = prompt?.inputSizeBytes;
+  if (typeof out !== "number" || out <= 0) return null;
+
+  // A real reduction = the output is meaningfully smaller than the input.
+  // The 5% floor avoids celebrating noise on a plain format conversion.
+  let reduction = null;
+  if (typeof inp === "number" && inp > 0 && inp > out * 1.05) {
+    reduction = {
+      before: formatFileSize(inp),
+      after: formatFileSize(out),
+      percent: Math.round((1 - out / inp) * 100),
+    };
+  }
+  // Sub-line headline: only when there's no reduction bar to carry it.
+  const headline = reduction ? null : formatFileSize(out);
+
+  let targetNote = null;
+  let targetMet = null;
+  if (typeof prompt?.compressionTargetBytes === "number") {
+    const target = prompt.compressionTargetBytes;
+    targetMet = prompt.compressionTargetMet === true;
+    if (targetMet) {
+      targetNote = `Within your ${formatFileSize(target)} target.`;
+    } else {
+      targetNote =
+        `Your ${formatFileSize(target)} target wasn't reachable for this ` +
+        `file. ${formatFileSize(out)} is the smallest it goes without ` +
+        `unacceptable quality loss — that's the best possible here.`;
+    }
+  }
+
+  return { reduction, headline, targetNote, targetMet };
 }
 
 /**

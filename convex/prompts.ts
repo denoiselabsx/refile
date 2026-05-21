@@ -98,14 +98,20 @@ export const get = query({
     const prompt = await ctx.db.get(id);
     if (!prompt || prompt.userId !== userId) return null;
 
-    // Attach signed URLs for outputs (Convex storage returns short-lived URLs)
+    // Attach signed URLs for outputs (Convex storage returns short-lived
+    // URLs). `size` is the real blob size so the UI can show an honest
+    // per-file size — essential for compression jobs.
     const outputUrls = prompt.outputStorageIds
       ? await Promise.all(
-          prompt.outputStorageIds.map(async (sid, i) => ({
-            storageId: sid,
-            filename: prompt.outputFilenames?.[i] ?? "output",
-            url: await ctx.storage.getUrl(sid),
-          }))
+          prompt.outputStorageIds.map(async (sid, i) => {
+            const meta = await ctx.db.system.get(sid);
+            return {
+              storageId: sid,
+              filename: prompt.outputFilenames?.[i] ?? "output",
+              url: await ctx.storage.getUrl(sid),
+              size: meta?.size ?? null,
+            };
+          })
         )
       : [];
 
@@ -630,6 +636,12 @@ export const patchExecution = internalMutation({
     // diagnoseError() produced a specific cause.
     failureTitle: v.optional(v.string()),
     failureBody: v.optional(v.string()),
+    // Measured sizes + compression-target outcome (see schema).
+    inputSizeBytes: v.optional(v.number()),
+    outputSizeBytes: v.optional(v.number()),
+    compressionTargetBytes: v.optional(v.number()),
+    compressionTargetMet: v.optional(v.boolean()),
+    compressionAttempts: v.optional(v.number()),
     status: v.union(
       v.literal("running"),
       v.literal("completed"),

@@ -211,6 +211,23 @@ export default defineSchema({
         })
       )
     ),
+    // Real measured byte sizes — sum of input blobs and sum of output
+    // blobs. Written on a successful run alongside outputStorageIds. Used
+    // by the success card to show the honest result size (a compression
+    // job that asked for "under 1 MB" but landed at 4.5 MB must SHOW
+    // 4.5 MB, not the model's optimistic description). Plain numbers, no
+    // tool-leak risk — safe to ship to the browser.
+    inputSizeBytes: v.optional(v.number()),
+    outputSizeBytes: v.optional(v.number()),
+    // Compression-target outcome. Set only on jobs where the prompt asked
+    // for a specific size ("under 1 MB", "compress to 5MB"). targetBytes
+    // is what the user asked for; targetMet says whether the final output
+    // actually reached it. Drives the honest "best we could do" copy.
+    compressionTargetBytes: v.optional(v.number()),
+    compressionTargetMet: v.optional(v.boolean()),
+    // How many compression attempts the iterative loop ran (1 = single
+    // pass succeeded or no target). Audit/analytics only.
+    compressionAttempts: v.optional(v.number()),
     // Set by the cleanup cron once the blobs are deleted from storage.
     // The history row stays; only file URLs become unavailable.
     filesExpired: v.optional(v.boolean()),
