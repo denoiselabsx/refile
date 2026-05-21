@@ -226,11 +226,46 @@ async def run(request: Request):
             dest = Path(workdir) / filename
             dest.write_bytes(await upload.read())
 
+        # Per-request environment. Two things matter here:
+        #
+        #  1. A writable, PRIVATE HOME. Several tools (LibreOffice, fontconfig,
+        #     matplotlib-style caches) want to write under $HOME. The container's
+        #     real home may be read-only or — worse — SHARED across the
+        #     concurrent requests Fluid Compute packs into one warm instance.
+        #  2. A UNIQUE LibreOffice user profile. Headless `soffice` locks its
+        #     profile dir; if a second concurrent invocation reuses the default
+        #     profile it silently exits non-zero ("source file could not be
+        #     loaded" / no output). This was an intermittent, load-dependent
+        #     failure for every doc conversion (docx→pdf, pdf→docx, xlsx→csv).
+        #     Giving each run its own profile under the temp dir removes the
+        #     contention entirely.
+        run_env = dict(os.environ)
+        run_env["HOME"] = workdir
+        lo_profile = Path(workdir) / ".lo-profile"
+
+        cmd_to_run = command
+        # Transparently pin soffice/libreoffice to the private profile. The
+        # AI-generated recipe never knows about -env: flags (and shouldn't —
+        # they'd trip the no-absolute-path validator). Inject it here, right
+        # after the binary, so every document conversion is concurrency-safe
+        # without the recipe book having to care.
+        stripped = command.lstrip()
+        for binname in ("soffice", "libreoffice"):
+            if stripped.startswith(binname + " ") or stripped == binname:
+                rest = stripped[len(binname):]
+                cmd_to_run = (
+                    f'{binname} '
+                    f'"-env:UserInstallation={lo_profile.as_uri()}"'
+                    f'{rest}'
+                )
+                break
+
         proc = subprocess.run(
-            ["bash", "-lc", command],
+            ["bash", "-lc", cmd_to_run],
             cwd=workdir,
             capture_output=True,
             timeout=EXEC_TIMEOUT_SECS,
+            env=run_env,
         )
         stdout = (proc.stdout or b"").decode("utf-8", errors="replace")
         stderr = (proc.stderr or b"").decode("utf-8", errors="replace")

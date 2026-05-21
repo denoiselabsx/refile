@@ -451,12 +451,17 @@ export const getForApi = query({
         ? "succeeded"
         : (row.status as "pending" | "generating" | "running" | "failed");
 
-    // Failure: surface coarse failureKind + generic message. NEVER leak
-    // raw errorMessage (which contains tool names, paths, stderr).
+    // Failure: surface coarse failureKind + a message. NEVER leak raw
+    // errorMessage (tool names, paths, stderr). Prefer the diagnosed,
+    // already-sanitized failureBody when present — it is specific and
+    // actionable; fall back to the coarse per-kind message otherwise.
     let errorBody: { code: string; message: string } | undefined;
     if (row.status === "failed") {
       const kind = row.failureKind ?? "aiError";
-      errorBody = mapFailureKindToApi(kind);
+      const coarse = mapFailureKindToApi(kind);
+      errorBody = row.failureBody
+        ? { code: coarse.code, message: row.failureBody }
+        : coarse;
     }
 
     return {
@@ -621,6 +626,10 @@ export const patchExecution = internalMutation({
         v.literal("aiError")
       )
     ),
+    // User-safe diagnosed copy (see schema). Optional — set only when
+    // diagnoseError() produced a specific cause.
+    failureTitle: v.optional(v.string()),
+    failureBody: v.optional(v.string()),
     status: v.union(
       v.literal("running"),
       v.literal("completed"),

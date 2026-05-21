@@ -289,6 +289,8 @@ export function AIResponse({ prompt }) {
       {isFailed && (
         <FailureCard
           failureKind={prompt.failureKind}
+          failureTitle={prompt.failureTitle}
+          failureBody={prompt.failureBody}
           promptId={prompt._id}
         />
       )}
@@ -312,14 +314,38 @@ export function AIResponse({ prompt }) {
 }
 
 /**
- * Failure presentation, keyed off the coarse failureKind the backend set.
- * Each branch tells the user what actually went wrong and what to do next —
- * the previous single card claimed every failure was "too much in one shot",
- * which sent users (e.g. "convert to png" with no file uploaded) in circles.
+ * Failure presentation.
+ *
+ * Three tiers, most-specific first:
+ *  1. failureTitle/failureBody — DIAGNOSED copy from diagnoseError() on the
+ *     server: the real cause (password-protected, scanned PDF, bad codec…)
+ *     plus a concrete alternative. Already sanitized; shown verbatim.
+ *  2. failureKind === "complex" — the genuinely-too-much-in-one-shot card.
+ *  3. The coarse per-failureKind COPY table — fallback when no diagnosis
+ *     was produced.
+ *
  * No logs, commands, or tool names ever appear here.
  */
-function FailureCard({ failureKind }) {
-  // Genuinely-complex requests: keep the original, correct guidance.
+function FailureCard({ failureKind, failureTitle, failureBody }) {
+  // Tier 1: a specific server-diagnosed cause. Both fields must be present
+  // (a half-diagnosis falls through to the coarse copy).
+  if (failureTitle && failureBody) {
+    return (
+      <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">
+        <p className="flex items-center gap-1.5 font-medium text-foreground">
+          <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+          {failureTitle}
+        </p>
+        <p className="mt-1">{failureBody}</p>
+        <p className="mt-2 text-[12px]">
+          This attempt wasn&apos;t counted toward your usage — retry as many
+          times as you like.
+        </p>
+      </div>
+    );
+  }
+
+  // Tier 2: genuinely-complex requests — keep the original, correct guidance.
   if (failureKind === "complex" || !failureKind) {
     return (
       <div className="surface px-4 py-3.5 text-[13px] leading-relaxed text-muted-foreground">

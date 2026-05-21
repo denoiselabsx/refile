@@ -9,6 +9,8 @@ import { z } from "zod";
 import { Polar } from "@polar-sh/sdk";
 import { validateCommand } from "./commandValidator";
 import { correctCommand } from "./commandCorrector";
+import { preflightCommand } from "./commandPreflight";
+import { diagnoseError } from "./diagnoseError";
 import { CONVERSION_EVENT_NAME } from "../lib/polar.js";
 import type { Id } from "./_generated/dataModel";
 
@@ -756,6 +758,33 @@ DOCX/PPTX/XLSX/ODT → PDF (LibreOffice headless, single command):
   # NOTE: soffice writes to CWD using the input basename + new extension.
   # Do NOT pass -o. Do NOT chain. The output filename is derived.
 
+CRITICAL — soffice output-name rule (multi-dot filenames):
+  soffice ALWAYS derives the output name by taking the input filename and
+  replacing ONLY its LAST extension (the part after the final dot) with the
+  target extension. It keeps everything before that final dot verbatim,
+  dots included. So for an input named 'My.Report.v2.final.pdf' converted
+  to docx, soffice writes 'My.Report.v2.final.docx' — NOT 'My.docx'.
+  output_files MUST list that EXACT derived name. Compute it by stripping
+  the final '.<ext>' off the input and appending the new '.<ext>'. Getting
+  this wrong is reported as a missing-output failure.
+
+PDF → DOCX / editable Word (LibreOffice, MUST use the Writer import filter):
+  soffice --headless --infilter='writer_pdf_import' --convert-to docx 'in.pdf'
+  # produces in.docx (last-extension swap — see the soffice rule above)
+  # The --infilter='writer_pdf_import' part is REQUIRED. Without it,
+  # LibreOffice imports the PDF into Draw, and Draw cannot export .docx —
+  # the command fails. The Writer import filter is what makes PDF→docx work.
+  # CAPABILITY HONESTY: this works for PDFs that contain real, selectable
+  # text (born-digital PDFs). For a SCANNED / image-only PDF (photos of
+  # pages, no text layer) it produces a docx of un-editable page images,
+  # not editable text — that is usually not what the user wants. If the
+  # user's wording or the filename strongly suggests a scan, prefer
+  # kind="chat": say a scanned PDF can't become editable text directly,
+  # and offer OCR (PDF → text) as the closest thing you CAN do.
+
+PDF → ODT / RTF (same Writer-import requirement as docx):
+  soffice --headless --infilter='writer_pdf_import' --convert-to odt 'in.pdf'
+
 DOCX → TXT (LibreOffice):
   soffice --headless --convert-to txt 'in.docx'
 
@@ -1285,7 +1314,7 @@ export const runJob = internalAction({
         // Same deterministic semantic fixer as the single-command path
         // (e.g. ffmpeg volume=50% -> 0.5), applied per step.
         const correction = correctCommand(step.command);
-        const cmd = correction.command;
+        let cmd = correction.command;
         if (correction.notes.length) {
           // Internal only — the user never sees the correction machinery.
           console.log(
@@ -1294,6 +1323,47 @@ export const runJob = internalAction({
             )}`
           );
         }
+
+        // Per-step pre-flight. A step's "inputs" are everything produced so
+        // far (originals + every earlier step's outputs) — that is the set
+        // preflight must validate filename references against, and the set
+        // soffice/exiftool name-derivation rules read. effectiveStepOutputs
+        // is what the OUTPUT CONTRACT verifies for this step.
+        const availableToStep = [...produced.keys()];
+        const stepPreflight = preflightCommand(
+          cmd,
+          step.output_files,
+          availableToStep
+        );
+        let effectiveStepOutputs = step.output_files;
+        if (!stepPreflight.ok) {
+          // Structural certainty of failure — fail the pipeline here with a
+          // calm, non-technical reason rather than burning a Modal run.
+          stepRecords[i].status = "failed";
+          await ctx.runMutation(internal.prompts.patchPipeline, {
+            promptId,
+            pipelineSteps: stepRecords,
+          });
+          console.log(
+            `[runJob] step ${i + 1} preflight rejected for ${promptId}: ` +
+              stepPreflight.reason
+          );
+          await ctx.runMutation(internal.prompts.patchExecution, {
+            promptId,
+            status: "failed",
+            failureKind: stepPreflight.failureKind,
+            errorMessage: `Step ${i + 1} preflight: ${stepPreflight.reason}`,
+          });
+          return;
+        }
+        effectiveStepOutputs = stepPreflight.effectiveOutputs;
+        if (stepPreflight.notes.length) {
+          console.log(
+            `[runJob] step ${i + 1} preflight adjusted outputs for ` +
+              `${promptId}: ${stepPreflight.notes.join(" | ")}`
+          );
+        }
+
         stepRecords[i].command = cmd;
         stepRecords[i].status = "running";
         await ctx.runMutation(internal.prompts.patchPipeline, {
@@ -1313,17 +1383,17 @@ export const runJob = internalAction({
             files.push({ filename: fname, blob });
           }
 
-          const r = await runModal(modalCfg, cmd, files, step.output_files);
+          const r = await runModal(modalCfg, cmd, files, effectiveStepOutputs);
           totalModalMs += r.durationMs;
 
-          // OUTPUT CONTRACT, per step: every file this step declared must
-          // come back non-empty. A step that drops a declared output would
-          // otherwise feed a missing/broken intermediate to the next step
-          // and silently corrupt the whole chain. Fail at the step instead.
-          const missing = verifyOutputs(step.output_files, r.outputs);
+          // OUTPUT CONTRACT, per step: every file this step was expected to
+          // produce (preflight-corrected) must come back non-empty. A step
+          // that drops an output would otherwise feed a missing/broken
+          // intermediate to the next step and silently corrupt the chain.
+          const missing = verifyOutputs(effectiveStepOutputs, r.outputs);
           if (missing.length > 0) {
             throw new StepError(
-              `step ${i + 1} exited 0 but did not produce all declared ` +
+              `step ${i + 1} exited 0 but did not produce all expected ` +
                 `outputs (missing: ${missing.join(", ")})`,
               r.logs
             );
@@ -1336,6 +1406,25 @@ export const runJob = internalAction({
               bytesToBlob(out.bytes, mimeFromFilename(out.filename))
             );
           }
+          // If preflight rewrote this step's output names (e.g. soffice
+          // derives its own name), the worker returned the REAL names —
+          // but a later step's input_files, and validatePlan's linking,
+          // reference the names the MODEL declared. Alias each declared
+          // name to the matching real blob so downstream steps and the
+          // final-delivery lookup still resolve. Pairing is positional:
+          // preflight rewrites the whole list 1:1.
+          if (
+            effectiveStepOutputs !== step.output_files &&
+            effectiveStepOutputs.length === step.output_files.length
+          ) {
+            for (let k = 0; k < step.output_files.length; k++) {
+              const declaredName = step.output_files[k];
+              const realBlob = produced.get(effectiveStepOutputs[k]);
+              if (realBlob && !produced.has(declaredName)) {
+                produced.set(declaredName, realBlob);
+              }
+            }
+          }
           stepRecords[i].status = "completed";
           stepRecords[i].logs = r.logs.slice(-4000);
           await ctx.runMutation(internal.prompts.patchPipeline, {
@@ -1345,28 +1434,54 @@ export const runJob = internalAction({
         } catch (err) {
           // Partial failure: stop here, persist what ran. NOT metered
           // or billed (meterSuccess is only reached on full success).
+          // Diagnose the sandbox logs into a specific, honest cause —
+          // a StepError carries them; an internal error (missing blob)
+          // does not and stays a server-side "config" failure.
+          const isStepErr = err instanceof StepError;
+          const rawLogs = isStepErr ? (err as StepError).logs : "";
           stepRecords[i].status = "failed";
-          stepRecords[i].logs =
-            err instanceof StepError ? err.logs.slice(-4000) : undefined;
+          stepRecords[i].logs = isStepErr ? rawLogs.slice(-4000) : undefined;
           await ctx.runMutation(internal.prompts.patchPipeline, {
             promptId,
             pipelineSteps: stepRecords,
           });
+          if (!isStepErr) {
+            await ctx.runMutation(internal.prompts.patchExecution, {
+              promptId,
+              status: "failed",
+              failureKind: "config",
+              errorMessage:
+                `Step ${i + 1}/${steps.length} internal error: ` +
+                (err instanceof Error ? err.message : String(err)),
+            });
+            return;
+          }
+          const exitMatch = /exited with code (\d+)/.exec(
+            (err as Error).message
+          );
+          const diag = diagnoseError(
+            step.tool ?? "",
+            rawLogs,
+            exitMatch ? parseInt(exitMatch[1], 10) : undefined
+          );
           await ctx.runMutation(internal.prompts.patchExecution, {
             promptId,
             status: "failed",
-            failureKind: "execError",
-            sandboxLogs:
-              err instanceof StepError ? err.logs.slice(-8000) : undefined,
+            failureKind: diag.failureKind,
+            failureTitle: diag.userTitle,
+            failureBody: diag.userBody,
+            sandboxLogs: rawLogs.slice(-8000),
             errorMessage:
               `Step ${i + 1}/${steps.length} (${step.tool}) failed: ` +
-              (err instanceof Error ? err.message : String(err)),
+              (err instanceof Error ? err.message : String(err)) +
+              ` [diag:${diag.cause}]`,
           });
           return;
         }
       }
 
-      // Deliver ONLY the last step's declared outputs.
+      // Deliver ONLY the last step's declared outputs (declared names
+      // resolve via the alias set above even when preflight rewrote them).
       const finalNames = steps[steps.length - 1].output_files;
       const outputStorageIds: string[] = [];
       const outputFilenames: string[] = [];
@@ -1448,6 +1563,43 @@ export const runJob = internalAction({
       );
       ai.command = correction.command;
     }
+
+    // Pre-flight: a deterministic structural check (commandPreflight.ts).
+    // It catches the class of failure that validate + correct miss — a
+    // command whose declared output_files cannot match what the tool will
+    // actually write (soffice deriving its own output name, exiftool's
+    // in-place edit, the magick-subcommand trap). It either:
+    //   - returns effectiveOutputs = the names the tool TRULY produces, so
+    //     the OUTPUT CONTRACT below verifies reality, not the model's guess;
+    //   - or fails the job fast with honest copy, never burning a Modal run
+    //     on a command that is structurally certain to fail.
+    const preflight = preflightCommand(
+      ai.command,
+      ai.output_files,
+      promptDoc.inputFilenames
+    );
+    if (!preflight.ok) {
+      console.log(
+        `[runJob] preflight rejected command for ${promptId}: ${preflight.reason}`
+      );
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: preflight.failureKind,
+        errorMessage: `Preflight: ${preflight.reason}`,
+      });
+      return;
+    }
+    // The names the OUTPUT CONTRACT verifies against — what the tool will
+    // really write, which may differ from what the model declared.
+    const effectiveOutputs = preflight.effectiveOutputs;
+    if (preflight.notes.length) {
+      console.log(
+        `[runJob] preflight adjusted outputs for ${promptId}: ` +
+          preflight.notes.join(" | ")
+      );
+    }
+
     await ctx.runMutation(internal.prompts.patchAiResponse, {
       promptId,
       aiKind: "command",
@@ -1456,7 +1608,9 @@ export const runJob = internalAction({
       aiDescription: ai.description ?? "",
       aiTool: ai.tool,
       aiInputFiles: ai.input_files,
-      aiOutputFiles: ai.output_files,
+      // Store the names the tool actually produces — the success card and
+      // download list must reflect reality, not the model's guess.
+      aiOutputFiles: effectiveOutputs,
       status: "running",
     });
 
@@ -1488,31 +1642,38 @@ export const runJob = internalAction({
         modalCfg,
         ai.command,
         files,
-        ai.output_files
+        effectiveOutputs
       );
       modalMs = durationMs;
 
-      // OUTPUT CONTRACT: complete success means every declared output_files
-      // entry actually came back non-empty. The command can exit 0 yet drop
-      // declared files — that's a partial result, not a success. Fail it
+      // OUTPUT CONTRACT: complete success means every output the tool was
+      // expected to produce (effectiveOutputs — preflight-corrected, not the
+      // model's raw guess) actually came back non-empty. A command can exit
+      // 0 yet drop files — that's a partial result, not a success. Fail it
       // BEFORE storing/metering so it's never billed or shown as "Done".
-      const missing = verifyOutputs(ai.output_files, outputs);
+      const missing = verifyOutputs(effectiveOutputs, outputs);
       if (missing.length > 0) {
         console.log(
           `[runJob] incomplete outputs for ${promptId}: missing ${missing.join(
             ", "
-          )} (declared ${ai.output_files.join(", ")}, got ${outputs
+          )} (expected ${effectiveOutputs.join(", ")}, got ${outputs
             .map((o) => o.filename)
             .join(", ")})`
         );
+        // Exit 0 but missing files: diagnose from the logs so the user gets
+        // a specific reason ("page range doesn't exist", "empty document")
+        // instead of a blank "produced nothing".
+        const diag = diagnoseError(ai.tool ?? "", logs, 0);
         await ctx.runMutation(internal.prompts.patchExecution, {
           promptId,
           status: "failed",
-          failureKind: "noOutput",
+          failureKind: diag.failureKind,
+          failureTitle: diag.userTitle,
+          failureBody: diag.userBody,
           sandboxLogs: logs.slice(-8000),
           errorMessage:
-            `Command exited 0 but did not produce all declared outputs. ` +
-            `Missing: ${missing.join(", ")}.`,
+            `Command exited 0 but did not produce all expected outputs. ` +
+            `Missing: ${missing.join(", ")}. [diag:${diag.cause}]`,
         });
         return;
       }
@@ -1555,13 +1716,39 @@ export const runJob = internalAction({
         );
       }
     } catch (err) {
+      // A StepError carries the real sandbox logs — diagnose them into a
+      // specific, honest cause. A non-StepError (a worker HTTP error, a
+      // missing input blob) has no tool logs: that's our side, so it maps
+      // to a transient-config message rather than blaming the file.
+      const isStepErr = err instanceof StepError;
+      const rawLogs = isStepErr ? (err as StepError).logs : "";
+      const exitMatch = isStepErr
+        ? /exited with code (\d+)/.exec((err as Error).message)
+        : null;
+      const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : undefined;
+
+      if (!isStepErr) {
+        // Worker unreachable / staging failure — not the user's file.
+        await ctx.runMutation(internal.prompts.patchExecution, {
+          promptId,
+          status: "failed",
+          failureKind: "config",
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+
+      const diag = diagnoseError(ai.tool ?? "", rawLogs, exitCode);
       await ctx.runMutation(internal.prompts.patchExecution, {
         promptId,
         status: "failed",
-        failureKind: "execError",
-        sandboxLogs:
-          err instanceof StepError ? err.logs.slice(-8000) : undefined,
-        errorMessage: err instanceof Error ? err.message : String(err),
+        failureKind: diag.failureKind,
+        failureTitle: diag.userTitle,
+        failureBody: diag.userBody,
+        sandboxLogs: rawLogs.slice(-8000),
+        errorMessage:
+          (err instanceof Error ? err.message : String(err)) +
+          ` [diag:${diag.cause}]`,
       });
     }
   },

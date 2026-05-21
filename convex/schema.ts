@@ -183,6 +183,14 @@ export default defineSchema({
         v.literal("aiError") // AI generation itself failed
       )
     ),
+    // Diagnosed, user-SAFE failure copy. Unlike errorMessage (which holds
+    // raw stderr/tool names and must never reach the browser), these two
+    // are produced by diagnoseError() from the sandbox logs and contain
+    // ONLY non-technical, honest copy with a concrete next step. When set,
+    // the UI shows them verbatim instead of the generic per-failureKind
+    // card; when absent, it falls back to the coarse failureKind copy.
+    failureTitle: v.optional(v.string()),
+    failureBody: v.optional(v.string()),
     // Multi-tool pipeline (kind="pipeline"). One entry per step, in order.
     // The whole array is rewritten on each step transition (≤6 entries).
     // Only the LAST step's outputs become outputStorageIds; intermediates
