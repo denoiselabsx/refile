@@ -140,7 +140,10 @@ export default defineSchema({
 
   // A prompt = one chat turn: user prompt + AI command + execution result
   prompts: defineTable({
-    userId: v.id("users"),
+    // Optional: absent for anonymous (no-account) quick-convert jobs.
+    // When absent, source MUST be "anon" and anonIpHash MUST be set so the
+    // row is still attributable for quota / abuse / analytics purposes.
+    userId: v.optional(v.id("users")),
     // chatId is optional only for legacy rows; new turns always have one.
     chatId: v.optional(v.id("chats")),
     turnIndex: v.optional(v.number()),
@@ -241,17 +244,50 @@ export default defineSchema({
     // having to re-derive the inference. Absent on first turns and on
     // any turn that received an explicit upload or filename mention.
     chainedFromPromptId: v.optional(v.id("prompts")),
-    // Origin of this row. "api" = submitted via the public REST API.
-    // Absent = browser/UI. Used to drive per-step billing and analytics.
-    source: v.optional(v.union(v.literal("api"), v.literal("ui"))),
+    // Origin of this row. "api" = public REST API. "anon" = anonymous
+    // public Quick Convert (no userId). Absent = authed browser/UI. Used
+    // to gate billing (anon skips Polar entirely) and analytics.
+    source: v.optional(
+      v.union(v.literal("api"), v.literal("ui"), v.literal("anon"))
+    ),
+    // Hashed IP (sha256(ip + secret)) for anonymous rows only. Lets us
+    // attribute usage for quota + abuse detection without storing raw IPs
+    // (GDPR-friendlier). Indexed so the quota query is O(1).
+    anonIpHash: v.optional(v.string()),
     // For API submissions: the customer's webhook URL to POST job
     // settlement to. Absent = no webhook configured. The Phase 3
     // post-settlement action reads this column.
     webhookUrl: v.optional(v.string()),
+    // Quick Convert: when set, runJob SKIPS the Groq call entirely and
+    // uses the deterministic recipe with this id (convex/quickConvert-
+    // Commands.ts). Absent = normal AI-driven chat turn. Optional so all
+    // pre-existing rows stay valid with no migration.
+    quickConvertId: v.optional(v.string()),
   })
     .index("by_user_recent", ["userId"])
     .index("by_chat", ["chatId", "turnIndex"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    // Anonymous quota lookup: count today's successes by IP-hash. Used
+    // by anonQuota.ts to gate the next anon submit. (We scan by hash and
+    // filter by _creationTime in the handler — fewer indexes to maintain.)
+    .index("by_anon_ip", ["anonIpHash"]),
+
+  // Anonymous daily usage rollup. ONE row per (ipHash, day) so the quota
+  // check is a single get(), not a scan over today's prompts. Written by
+  // the runJob success path (anon branch) so failed conversions don't
+  // count against the limit — same fairness rule as Polar metering.
+  anonUsage: defineTable({
+    /** sha256(ip + ANON_IP_SECRET). Anonymous identity key. */
+    ipHash: v.string(),
+    /** YYYY-MM-DD (UTC) — the bucket this counter belongs to. */
+    day: v.string(),
+    /** Successful conversions for this ip/day. */
+    count: v.number(),
+    /** Cumulative bytes processed today, for abuse detection. */
+    bytesProcessed: v.number(),
+    /** Last update — drives the daily-reset behaviour. */
+    updatedAt: v.number(),
+  }).index("by_ip_day", ["ipHash", "day"]),
 
   // Self-improving loop: distilled lessons learned from clustered job
   // failures. The reviewFailures cron writes rows as "pending"; an admin

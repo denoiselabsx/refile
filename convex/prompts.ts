@@ -5,6 +5,8 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 import { assertWithinQuota, assertApiAllowed } from "./plans";
 import { publicPrompt } from "../lib/sanitize.js";
+import { getQuickConvertEntry, extOf } from "./quickConvertCommands";
+import { checkAnonQuota, utcDayKey } from "./anonQuota";
 
 /* ──────────────────────────────────────────────────────────────── *
  *  File upload helpers
@@ -16,6 +18,27 @@ export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not signed in");
+    return ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Bridge-secret-guarded upload URL generator for anonymous Quick Convert.
+ * Called server-side from /api/anon-convert/upload-url — never directly
+ * from the browser. The route validates basic abuse signals (IP rate
+ * limit on URL generation itself) before forwarding here.
+ *
+ * Why a separate mutation: the public `generateUploadUrl` requires auth
+ * by design (an unauthed signed URL is a free-storage-write gift). For
+ * anon we accept the risk gate-kept by the bridge secret + Next.js route
+ * rate-limiting; the route is the trust boundary, not Convex.
+ */
+export const generateAnonUploadUrl = mutation({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    const expected = process.env.API_BRIDGE_SECRET;
+    if (!expected) throw new Error("API_BRIDGE_SECRET is not set");
+    if (secret !== expected) throw new Error("Invalid bridge secret.");
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -151,10 +174,39 @@ export const submit = mutation({
     inputStorageIds: v.array(v.id("_storage")),
     inputFilenames: v.array(v.string()),
     chatId: v.optional(v.id("chats")),
+    // Quick Convert: a deterministic recipe id. When present, runJob skips
+    // the AI entirely (see convex/quickConvertCommands.ts + runJob.ts).
+    quickConvertId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not signed in");
+
+    // Quick Convert validation — reject an unknown recipe up front, and
+    // require that the uploaded files actually match the recipe's accepted
+    // input formats. There is no AI fallback on this path, so a mismatch
+    // must fail loudly here rather than dead-end in the sandbox.
+    const qcEntry = args.quickConvertId
+      ? getQuickConvertEntry(args.quickConvertId)
+      : null;
+    if (args.quickConvertId && !qcEntry) {
+      throw new Error("Unknown quick-convert type.");
+    }
+    if (qcEntry) {
+      if (args.inputStorageIds.length === 0) {
+        throw new Error("Upload a file to convert.");
+      }
+      if (!qcEntry.multiInput && args.inputStorageIds.length > 1) {
+        throw new Error("This conversion takes one file at a time.");
+      }
+      for (const name of args.inputFilenames) {
+        if (!qcEntry.fromExts.includes(extOf(name))) {
+          throw new Error(
+            `“${name}” isn't a supported input for ${qcEntry.label}.`
+          );
+        }
+      }
+    }
 
     // Resolve or create the chat for this turn.
     let chatId = args.chatId;
@@ -279,6 +331,9 @@ export const submit = mutation({
       status: "pending",
       ...(chainedFromPromptId
         ? { chainedFromPromptId }
+        : {}),
+      ...(args.quickConvertId
+        ? { quickConvertId: args.quickConvertId }
         : {}),
     });
 
@@ -408,6 +463,142 @@ export const submitForUser = mutation({
     await ctx.scheduler.runAfter(0, internal.runJob.runJob, { promptId });
 
     return { promptId, chatId };
+  },
+});
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  Anonymous Quick Convert submit. Called server-to-server from the
+ *  Next.js /api/anon-convert route, which is the ONLY place we can
+ *  trust the request IP (Convex mutations see no request headers).
+ *  The route hashes the IP and forwards the hash + file size; this
+ *  mutation runs the deterministic quota check, inserts a userless
+ *  prompt row, and schedules runJob. runJob's directConvert branch
+ *  detects `source: "anon"` and skips Polar metering entirely.
+ *
+ *  Quick-convert recipes only — anonymous chat / free-text prompts
+ *  are not supported (abuse surface too wide, no LLM cost recovery).
+ * ──────────────────────────────────────────────────────────────── */
+export const submitAnonymous = mutation({
+  args: {
+    secret: v.string(),
+    ipHash: v.string(),
+    quickConvertId: v.string(),
+    inputStorageIds: v.array(v.id("_storage")),
+    inputFilenames: v.array(v.string()),
+    /** Sum of input blob sizes — already-measured client-side then
+     *  re-verified server-side below against storage metadata. */
+    claimedTotalBytes: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const expected = process.env.API_BRIDGE_SECRET;
+    if (!expected) throw new Error("API_BRIDGE_SECRET is not set");
+    if (args.secret !== expected) throw new Error("Invalid bridge secret.");
+
+    // Recipe must exist + be a quick-convert id.
+    const entry = getQuickConvertEntry(args.quickConvertId);
+    if (!entry) throw new Error("Unknown quick-convert type.");
+    if (args.inputStorageIds.length === 0) {
+      throw new Error("No file uploaded.");
+    }
+    if (!entry.multiInput && args.inputStorageIds.length > 1) {
+      throw new Error("This conversion takes one file at a time.");
+    }
+    const sanitizedFilenames = args.inputFilenames.map(sanitizeFilename);
+    for (const name of sanitizedFilenames) {
+      if (!entry.fromExts.includes(extOf(name))) {
+        throw new Error(
+          `“${name}” isn't a supported input for ${entry.label}.`
+        );
+      }
+    }
+
+    // Verify real byte sizes — the route's `claimedTotalBytes` is a hint
+    // for the quota gate, but the cap is enforced on actual storage size
+    // so a lying client can't slip a 200MB file past a 25MB cap.
+    let totalBytes = 0;
+    for (const sid of args.inputStorageIds) {
+      const meta = await ctx.db.system.get(sid);
+      totalBytes += meta?.size ?? 0;
+    }
+
+    // Quota check against today's rollup. Reading-then-writing in a
+    // mutation is atomic in Convex (serializable per mutation), so two
+    // concurrent submits from the same IP can't both squeak past the cap.
+    const day = utcDayKey();
+    const rollup = await ctx.db
+      .query("anonUsage")
+      .withIndex("by_ip_day", (q) =>
+        q.eq("ipHash", args.ipHash).eq("day", day)
+      )
+      .unique();
+    const verdict = checkAnonQuota(rollup, totalBytes);
+    if (!verdict.ok) {
+      // Throw a structured error the route can translate to an HTTP code.
+      // The `reason` token is machine-readable; the message is user-safe.
+      throw new Error(`ANON_QUOTA:${verdict.reason}:${verdict.message}`);
+    }
+
+    const promptId = await ctx.db.insert("prompts", {
+      // userId deliberately absent — this is an anon row.
+      prompt: entry.label,
+      inputStorageIds: args.inputStorageIds,
+      inputFilenames: sanitizedFilenames,
+      status: "pending",
+      source: "anon" as const,
+      anonIpHash: args.ipHash,
+      quickConvertId: args.quickConvertId,
+    });
+
+    // Analytics — anon funnel tracking. No userId, just the event.
+    await ctx.runMutation(internal.events.logInternal, {
+      name: "anon_conversion_started",
+      props: {
+        promptId,
+        quickConvertId: args.quickConvertId,
+        fileCount: args.inputStorageIds.length,
+        ipHash: args.ipHash,
+        remaining: verdict.remaining,
+      },
+    });
+
+    await ctx.scheduler.runAfter(0, internal.runJob.runJob, { promptId });
+
+    return { promptId, remainingAfter: verdict.remaining };
+  },
+});
+
+/* ──────────────────────────────────────────────────────────────── *
+ *  Public anon-job poller (no auth). Used by the SEO landing pages
+ *  and /dashboard/quick when the visitor isn't signed in. Returns
+ *  the same sanitized shape as `get` but is keyed purely by the
+ *  promptId — anyone with the id can read the job (which is fine,
+ *  ids are unguessable Convex ids), and only anon rows are exposed
+ *  to keep authed-user data behind real auth.
+ * ──────────────────────────────────────────────────────────────── */
+export const getAnonymous = query({
+  args: { id: v.id("prompts") },
+  handler: async (ctx, { id }) => {
+    const prompt = await ctx.db.get(id);
+    if (!prompt) return null;
+    // Only serve anon rows here. Authed-user jobs require the real
+    // `get` query (which enforces auth).
+    if (prompt.source !== "anon") return null;
+
+    const outputUrls = prompt.outputStorageIds
+      ? await Promise.all(
+          prompt.outputStorageIds.map(async (sid, i) => {
+            const meta = await ctx.db.system.get(sid);
+            return {
+              storageId: sid,
+              filename: prompt.outputFilenames?.[i] ?? "output",
+              url: await ctx.storage.getUrl(sid),
+              size: meta?.size ?? null,
+            };
+          })
+        )
+      : [];
+
+    return { ...publicPrompt(prompt), outputUrls };
   },
 });
 

@@ -12,6 +12,8 @@ import { LogoMark } from "@/components/brand/logo";
 import { useAuth } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 import { BRAND, MARKETING_NAV, isActive } from "@/lib/nav";
+import { ConvertMegaMenu } from "@/components/shell/convert-mega-menu";
+import { ProductMegaMenu } from "@/components/shell/product-mega-menu";
 
 export function TopBar() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -100,6 +102,40 @@ export function TopBar() {
             onMouseLeave={() => setHovered(null)}
           >
             {MARKETING_NAV.map((item) => {
+              // Mega-menu items render a popover trigger instead of a
+              // plain Link. Each menu has its own component because the
+              // shape differs: Product is a 4-item description list
+              // (carries the AI-automation positioning), Convert is a
+              // 5-column recipe grid (the SEO funnel). The active state
+              // for each is computed against its own URL prefix.
+              if (item.kind === "menu") {
+                if (item.id === "product") {
+                  return (
+                    <ProductMegaMenu
+                      key={item.id}
+                      label={item.label}
+                      active={
+                        pathname === "/" ||
+                        pathname?.startsWith("/dashboard") ||
+                        pathname?.startsWith("/workflow") ||
+                        pathname?.startsWith("/presets") ||
+                        pathname?.startsWith("/developers") ||
+                        false
+                      }
+                    />
+                  );
+                }
+                if (item.id === "convert") {
+                  return (
+                    <ConvertMegaMenu
+                      key={item.id}
+                      label={item.label}
+                      active={pathname?.startsWith("/convert") ?? false}
+                    />
+                  );
+                }
+                return null;
+              }
               const active = isActive(pathname, item.href);
               const isHovered = hovered === item.href;
               return (

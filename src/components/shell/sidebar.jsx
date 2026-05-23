@@ -26,19 +26,20 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
   const { user, logout } = useAuth();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  // Read localStorage synchronously during initial render so the sidebar
-  // never flashes "collapsed" before snapping to the user's saved state.
-  // Safe on SSR — guarded by typeof window check.
-  const [expanded, setExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem(STORAGE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
+  // Must start `false` so SSR and the first client render agree — reading
+  // localStorage in the initializer would diverge from the server's HTML
+  // and trigger a hydration mismatch (the server has no `window`, the
+  // client sometimes returns "true"). Instead we read the stored value
+  // AFTER mount and snap to it then. The first paint disables the
+  // width transition so a user with `expanded=true` saved snaps open
+  // instantly instead of animating from 14 → 64.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) === "true";
+      if (saved) setExpanded(true);
+    } catch {}
     setMounted(true);
   }, []);
 
@@ -66,7 +67,11 @@ export function AppSidebar({ navExtraContent = null, footerExtraContent = null }
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-30 hidden flex-col overflow-hidden border-r border-border bg-background/80 backdrop-blur-md transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] lg:flex",
+        "fixed inset-y-0 left-0 z-30 hidden flex-col overflow-hidden border-r border-border bg-background/80 backdrop-blur-md ease-[cubic-bezier(0.16,1,0.3,1)] lg:flex",
+        // Only animate the width AFTER mount — the initial snap from
+        // `false` (SSR) to the user's saved state shouldn't be a visible
+        // transition; toggles after that should.
+        mounted && "transition-[width] duration-300",
         expanded ? "w-64" : "w-14"
       )}
     >

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   FileText,
   FileType,
@@ -8,6 +9,7 @@ import {
   Music,
   Minimize2,
   BookOpen,
+  ArrowRight,
 } from "lucide-react";
 import { track } from "@/lib/analytics";
 
@@ -113,9 +115,18 @@ export function QuickConvert({ onPick }) {
 
   return (
     <div className="mt-7 sm:mt-9">
-      <p className="mb-2.5 text-[12px] font-medium text-muted-foreground">
-        Quick convert — pick one, then drop your file
-      </p>
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <p className="text-[12px] font-medium text-muted-foreground">
+          Quick convert — pick one, then drop your file
+        </p>
+        <Link
+          href="/dashboard/quick"
+          className="group inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Direct convert &amp; compress
+          <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {TILES.map((tile) => {
           const Icon = tile.icon;

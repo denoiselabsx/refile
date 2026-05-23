@@ -41,20 +41,27 @@ export default async function sitemap() {
     { url: `${SITE_URL}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/security`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
-    // Master index for every conversion landing page — high priority
-    // because it's the natural crawl entry-point that fans out to all
-    // /convert/* leaves.
+    // Master indexes for every conversion landing page. /convert is the
+    // deterministic-tool hub (anon-friendly); /formats is the older
+    // catalogue. Both high priority — natural crawl entry-points that
+    // fan out to all /convert/* leaves.
+    { url: `${SITE_URL}/convert`, lastModified: now, changeFrequency: "weekly", priority: 0.95 },
     { url: `${SITE_URL}/formats`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
   ];
 
   // SEO landing pages: one entry per hand-tuned conversion in
   // src/lib/conversions.js. Each is a stable URL with unique copy +
-  // FAQ JSON-LD, so we want Google indexing every one.
+  // FAQ + HowTo + SoftwareApplication + BreadcrumbList JSON-LD.
+  //
+  // Priority 0.85 — these are the commercial intent pages; only the
+  // root and the hub outrank them. changeFrequency=monthly is honest:
+  // the copy is hand-tuned and doesn't churn weekly, but the underlying
+  // recipe + tool versions get refined.
   const conversionEntries = CONVERSIONS.map((c) => ({
     url: `${SITE_URL}/convert/${c.slug}`,
     lastModified: now,
     changeFrequency: "monthly",
-    priority: 0.8,
+    priority: 0.85,
   }));
 
   const presets = HIDE_LAUNCH_FEATURES ? [] : await fetchPublicPresets();

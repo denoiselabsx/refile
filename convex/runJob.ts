@@ -17,6 +17,11 @@ import {
   buildCompressionLadder,
   formatBytes,
 } from "./compressionTarget";
+import {
+  getQuickConvertEntry,
+  extOf,
+  type QuickConvertEntry,
+} from "./quickConvertCommands";
 import { CONVERSION_EVENT_NAME } from "../lib/polar.js";
 import type { Id } from "./_generated/dataModel";
 
@@ -280,6 +285,42 @@ async function meterSuccess(
     });
     bytesProcessed += meta ?? 0;
   }
+
+  // ── Anonymous branch ──────────────────────────────────────────────
+  // No userId, no plan, no Polar. Bump the per-IP daily rollup so the
+  // public counter updates and the next submit can re-check quota.
+  // We deliberately keep this short — anon has no per-user usage row
+  // and no billing event; it is tracked purely by the anonUsage rollup
+  // + the event stream (logged from submitAnonymous on START, and below
+  // on COMPLETE for funnel analysis).
+  if (promptDoc.source === "anon" && promptDoc.anonIpHash) {
+    await ctx.runMutation(internal.anonUsage.bumpAnonUsage, {
+      ipHash: promptDoc.anonIpHash,
+      bytesProcessed,
+    });
+    await ctx.runMutation(internal.events.logInternal, {
+      name: "anon_conversion_completed",
+      props: {
+        promptId,
+        quickConvertId: promptDoc.quickConvertId,
+        bytesProcessed,
+        modalMs,
+      },
+    });
+    return;
+  }
+
+  // ── Authed branch ─────────────────────────────────────────────────
+  // Pre-existing behaviour: per-user usage row, optional API trial
+  // counter, Polar billing event.
+  if (!promptDoc.userId) {
+    // Defensive: a non-anon row with no userId is a schema invariant
+    // violation. Log and bail rather than crashing on the userId arg.
+    console.error(
+      `[runJob] meterSuccess: ${promptId} has no userId and source=${promptDoc.source}; skipping metering.`
+    );
+    return;
+  }
   await ctx.runMutation(internal.plans.recordConversion, {
     userId: promptDoc.userId,
     groqInputTokens,
@@ -288,8 +329,6 @@ async function meterSuccess(
     bytesProcessed,
     conversions,
   });
-  // API-source jobs additionally consume the lifetime free-trial counter.
-  // Same dimension as billing: a 3-step pipeline burns 3 trial slots.
   if (promptDoc.source === "api") {
     await ctx.runMutation(internal.plans.recordApiJobSuccess, {
       userId: promptDoc.userId,
@@ -1076,6 +1115,376 @@ async function ingestConversionToPolar(
 }
 
 /* ──────────────────────────────────────────────────────────────── *
+ *  Quick Convert — the deterministic, no-AI execution path.
+ *
+ *  Reached when a prompt row carries `quickConvertId`. The recipe (or the
+ *  compression ladder) supplies the command; everything after that —
+ *  security validation, semantic correction, the Modal worker, the output
+ *  contract, metering — is the SAME machinery the AI path uses. Quick
+ *  Convert is a generation shortcut, never a trust shortcut.
+ *
+ *  Bills as exactly ONE conversion via meterSuccess (groq tokens = 0,
+ *  honestly, since no model ran). Quota is already enforced in
+ *  prompts.submit before this action is scheduled.
+ * ──────────────────────────────────────────────────────────────── */
+async function runDirectConvert(
+  ctx: any,
+  promptId: Id<"prompts">,
+  promptDoc: any
+): Promise<void> {
+  const entry = getQuickConvertEntry(promptDoc.quickConvertId);
+  if (!entry) {
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "failed",
+      failureKind: "config",
+      errorMessage: `Unknown quick-convert id: ${promptDoc.quickConvertId}`,
+    });
+    return;
+  }
+
+  // No file → hard fail. There is no chat fallback on this path.
+  if (promptDoc.inputFilenames.length === 0) {
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "failed",
+      failureKind: "noInput",
+      failureTitle: "No file to convert",
+      failureBody: "Upload a file first, then run the conversion.",
+      errorMessage: "Quick convert: no input file.",
+    });
+    return;
+  }
+
+  // Re-check input extensions server-side (submit already did, but a recipe
+  // could change or a row be replayed). Belt and braces.
+  for (const name of promptDoc.inputFilenames) {
+    if (!entry.fromExts.includes(extOf(name))) {
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: "execError",
+        failureTitle: "Unsupported file",
+        failureBody: `“${name}” isn't a supported input for ${entry.label}.`,
+        errorMessage: `Quick convert: ${name} not in [${entry.fromExts.join(", ")}]`,
+      });
+      return;
+    }
+  }
+
+  const modalCfg = getModalConfig();
+  if (!modalCfg) {
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "failed",
+      failureKind: "config",
+      errorMessage: "Modal worker not configured (MODAL_WORKER_URL).",
+    });
+    return;
+  }
+
+  let modalMs = 0;
+
+  /* ── Compression recipe → walk the deterministic ladder ──────── */
+  if (entry.kind === "compress") {
+    // A target size is optional. parseCompressionTarget reads it from the
+    // prompt string the UI composed ("Compress … under 5 MB"). With no
+    // target we still walk the ladder and deliver the smallest acceptable
+    // rung — the user asked to "compress", just without a number.
+    const parsed = parseCompressionTarget(promptDoc.prompt);
+    const target = parsed?.targetBytes ?? null;
+    const ladder = buildCompressionLadder(promptDoc.inputFilenames[0]);
+    if (ladder.rungs.length === 0) {
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: "execError",
+        errorMessage: `No compression ladder for ${promptDoc.inputFilenames[0]}`,
+      });
+      return;
+    }
+
+    const inputName = promptDoc.inputFilenames[0];
+    const inputBlob = await ctx.storage.get(promptDoc.inputStorageIds[0]);
+    if (!inputBlob) {
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: "execError",
+        errorMessage: `Missing input ${promptDoc.inputStorageIds[0]}`,
+      });
+      return;
+    }
+    const inputBytes = inputBlob.size;
+
+    await ctx.runMutation(internal.prompts.patchAiResponse, {
+      promptId,
+      aiKind: "command",
+      aiTool: entry.tool,
+      aiInputFiles: [inputName],
+      status: "running",
+    });
+
+    let best: { bytes: Uint8Array; filename: string; logs: string } | null =
+      null;
+    let attempts = 0;
+    let lastLogs = "";
+
+    for (const rung of ladder.rungs) {
+      // Defense-in-depth: ladder commands are hand-written, but run the
+      // same security gate as any other command.
+      const v = validateCommand(rung.command);
+      if (!v.ok) {
+        console.error(
+          `[runJob] quick-convert ladder rung rejected for ${promptId}: ${v.reason}`
+        );
+        continue;
+      }
+      attempts++;
+      try {
+        const r = await runModal(
+          modalCfg,
+          rung.command,
+          [{ filename: inputName, blob: inputBlob }],
+          [rung.output]
+        );
+        modalMs += r.durationMs;
+        lastLogs = r.logs;
+        const out = r.outputs.find(
+          (o: { filename: string; bytes: Uint8Array }) =>
+            o.filename === rung.output && o.bytes.byteLength > 0
+        );
+        if (!out) continue;
+        if (!best || out.bytes.byteLength < best.bytes.byteLength) {
+          best = { bytes: out.bytes, filename: out.filename, logs: r.logs };
+        }
+        // With a target: stop at the first rung that fits. Without a
+        // target: keep climbing to deliver the smallest result.
+        if (target !== null && out.bytes.byteLength <= target) break;
+      } catch (err) {
+        lastLogs =
+          err instanceof StepError ? (err as StepError).logs : String(err);
+        console.log(
+          `[runJob] quick-convert rung ${attempts} failed for ${promptId}: ` +
+            (err instanceof Error ? err.message : String(err))
+        );
+      }
+    }
+
+    if (!best) {
+      const diag = diagnoseError(ladder.kind, lastLogs, undefined);
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: diag.failureKind,
+        failureTitle: diag.userTitle,
+        failureBody: diag.userBody,
+        sandboxLogs: lastLogs.slice(-8000),
+        errorMessage: `Quick-convert compression produced no usable output. [diag:${diag.cause}]`,
+      });
+      return;
+    }
+
+    const outBytes = best.bytes.byteLength;
+    const targetMet = target === null ? true : outBytes <= target;
+    const storageId = await ctx.storage.store(
+      bytesToBlob(best.bytes, mimeFromFilename(best.filename))
+    );
+
+    // Honest copy — state the achieved size, and if a target was set and
+    // missed, say so plainly.
+    const description =
+      target === null
+        ? `Compressed from ${formatBytes(inputBytes)} to ${formatBytes(
+            outBytes
+          )}.`
+        : targetMet
+          ? `Compressed to ${formatBytes(outBytes)} — within your ${formatBytes(
+              target
+            )} target.`
+          : `Compressed as far as it goes — ${formatBytes(
+              outBytes
+            )}. That's the smallest this file gets without unacceptable quality loss; your ${formatBytes(
+              target
+            )} target wasn't reachable.`;
+
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "completed",
+      outputStorageIds: [storageId] as any,
+      outputFilenames: [best.filename],
+      sandboxLogs: best.logs.slice(-8000),
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: outBytes,
+      ...(target !== null
+        ? { compressionTargetBytes: target, compressionTargetMet: targetMet }
+        : {}),
+      compressionAttempts: attempts,
+    });
+    await ctx.runMutation(internal.prompts.patchAiResponse, {
+      promptId,
+      aiDescription: description,
+      aiOutputFiles: [best.filename],
+    });
+    await meterSuccess(ctx, promptDoc, promptId, 0, 0, modalMs);
+    console.log(
+      `[runJob] quick-convert compress ${promptId}: ${attempts} attempt(s), ` +
+        `${formatBytes(inputBytes)} → ${formatBytes(outBytes)}`
+    );
+    return;
+  }
+
+  /* ── Convert recipe → single deterministic command ───────────── */
+  const built = entry.build!(promptDoc.inputFilenames);
+
+  // Same security gate as the AI path.
+  const valid = validateCommand(built.command);
+  if (!valid.ok) {
+    console.error(
+      `[runJob] quick-convert command rejected for ${promptId}: ${valid.reason}`
+    );
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "failed",
+      failureKind: "config",
+      errorMessage: `Quick-convert command failed validation: ${valid.reason}`,
+    });
+    return;
+  }
+  // correctCommand returns { command, notes } — extract the string. The
+  // earlier version of this branch passed the whole object as a string,
+  // which made firstBinary().trim() crash and silently leave the job
+  // stuck at status="pending" forever. Convex actions that throw before
+  // any patchExecution write don't show the user a failure — they just
+  // hang. Use the .command field, same as the AI path does.
+  const correction = correctCommand(built.command);
+  const command = correction.command;
+  if (correction.notes.length) {
+    console.log(
+      `[runJob] quick-convert auto-corrected for ${promptId}: ${correction.notes.join(" | ")}`
+    );
+  }
+
+  // commandPreflight reconciles declared vs. actually-written output names
+  // (critical for pdftoppm's unknowable page count — see quickConvertCommands).
+  const preflight = preflightCommand(
+    command,
+    built.outputs,
+    promptDoc.inputFilenames
+  );
+  if (!preflight.ok) {
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "failed",
+      failureKind: preflight.failureKind,
+      errorMessage: `Preflight: ${preflight.reason}`,
+    });
+    return;
+  }
+  const effectiveOutputs = preflight.effectiveOutputs;
+
+  await ctx.runMutation(internal.prompts.patchAiResponse, {
+    promptId,
+    aiKind: "command",
+    aiCommand: command,
+    aiDescription: entry.description,
+    aiTool: entry.tool,
+    aiInputFiles: promptDoc.inputFilenames,
+    aiOutputFiles: effectiveOutputs,
+    status: "running",
+  });
+
+  try {
+    const files: Array<{ filename: string; blob: Blob }> = [];
+    for (let i = 0; i < promptDoc.inputStorageIds.length; i++) {
+      const blob = await ctx.storage.get(promptDoc.inputStorageIds[i]);
+      if (!blob) throw new Error(`Missing input ${promptDoc.inputStorageIds[i]}`);
+      files.push({ filename: promptDoc.inputFilenames[i], blob });
+    }
+
+    const { outputs, logs, durationMs } = await runModal(
+      modalCfg,
+      command,
+      files,
+      effectiveOutputs
+    );
+    modalMs = durationMs;
+
+    // OUTPUT CONTRACT — every declared output must come back non-empty.
+    const missing = verifyOutputs(effectiveOutputs, outputs);
+    if (missing.length > 0) {
+      const diag = diagnoseError(entry.tool, logs, 0);
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: diag.failureKind,
+        failureTitle: diag.userTitle,
+        failureBody: diag.userBody,
+        sandboxLogs: logs.slice(-8000),
+        errorMessage:
+          `Quick-convert command exited 0 but missing: ${missing.join(", ")}. ` +
+          `[diag:${diag.cause}]`,
+      });
+      return;
+    }
+
+    const outputStorageIds: string[] = [];
+    const outputFilenames: string[] = [];
+    let outBytesTotal = 0;
+    for (const out of outputs) {
+      const sid = await ctx.storage.store(
+        bytesToBlob(out.bytes, mimeFromFilename(out.filename))
+      );
+      outputStorageIds.push(sid as string);
+      outputFilenames.push(out.filename);
+      outBytesTotal += out.bytes.byteLength;
+    }
+    const inBytesTotal = files.reduce((s, f) => s + (f.blob.size || 0), 0);
+
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "completed",
+      outputStorageIds: outputStorageIds as any,
+      outputFilenames,
+      sandboxLogs: logs.slice(-8000),
+      inputSizeBytes: inBytesTotal,
+      outputSizeBytes: outBytesTotal,
+    });
+    // The success card reads aiOutputFiles — reflect what the tool really
+    // produced (pdftoppm may return more pages than the one we declared).
+    await ctx.runMutation(internal.prompts.patchAiResponse, {
+      promptId,
+      aiOutputFiles: outputFilenames,
+    });
+    await meterSuccess(ctx, promptDoc, promptId, 0, 0, modalMs);
+  } catch (err) {
+    const isStepErr = err instanceof StepError;
+    if (!isStepErr) {
+      await ctx.runMutation(internal.prompts.patchExecution, {
+        promptId,
+        status: "failed",
+        failureKind: "config",
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+    const rawLogs = (err as StepError).logs;
+    const exitMatch = /exited with code (\d+)/.exec((err as Error).message);
+    const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : undefined;
+    const diag = diagnoseError(entry.tool, rawLogs, exitCode);
+    await ctx.runMutation(internal.prompts.patchExecution, {
+      promptId,
+      status: "failed",
+      failureKind: diag.failureKind,
+      failureTitle: diag.userTitle,
+      failureBody: diag.userBody,
+      sandboxLogs: rawLogs.slice(-8000),
+      errorMessage: `Quick-convert failed. [diag:${diag.cause}]`,
+    });
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────── *
  *  Main action
  * ──────────────────────────────────────────────────────────────── */
 
@@ -1086,6 +1495,34 @@ export const runJob = internalAction({
       promptId,
     });
     if (!promptDoc) throw new Error("Prompt not found");
+
+    // Quick Convert: deterministic recipe, no AI. Branches off before the
+    // Groq call entirely — the command comes from the hand-written table,
+    // then runs through the SAME validate → correct → Modal → contract
+    // pipeline as any AI command.
+    //
+    // Wrapped in a try/catch so a bug in this branch (a typo, a type
+    // mismatch — like the .trim() crash that left rows stuck at "pending"
+    // for hours) lands as a visible failure instead of an invisible hang.
+    // Convex doesn't auto-patch the row on action errors; this is the only
+    // place we get to translate "code threw" into "user sees a failure".
+    if (promptDoc.quickConvertId) {
+      try {
+        await runDirectConvert(ctx, promptId, promptDoc);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[runJob] runDirectConvert crashed for ${promptId}: ${msg}`);
+        await ctx.runMutation(internal.prompts.patchExecution, {
+          promptId,
+          status: "failed",
+          failureKind: "config",
+          failureTitle: "Something went wrong",
+          failureBody: "We hit an unexpected error preparing this conversion. The team has been notified — please try a different file or try again in a few minutes.",
+          errorMessage: `runDirectConvert crashed: ${msg}`,
+        });
+      }
+      return;
+    }
 
     /* ── Step 1: Groq generates the command ───────────────────── */
 
